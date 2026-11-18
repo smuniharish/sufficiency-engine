@@ -37,5 +37,5 @@ documentation is built by Read the Docs from `.readthedocs.yaml`.
 6. Install the wheel into a fresh environment and run the quickstart example.
 7. Publish the files in `dist/` to PyPI with `uv publish`, using a credential
    that is never stored in the repository.
-8. Tag the release commit with the version, for example `v0.1.0`, and push the
+8. Tag the release commit with the version, for example `v1.0.0`, and push the
    tag.

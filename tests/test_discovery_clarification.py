@@ -78,6 +78,40 @@ def test_invalid_answers_are_rejected_by_their_specific_constraints(
     assert validate_answer(value, answer_type, constraints, 100) is not None
 
 
+@pytest.mark.parametrize(
+    ("value", "answer_type", "constraints", "reason"),
+    [
+        (float("nan"), AnswerType.ANY, AnswerConstraints(), "not finite JSON"),
+        ({"items": {1, 2}}, AnswerType.ANY, AnswerConstraints(), "not finite JSON"),
+        (5, AnswerType.ANY, AnswerConstraints(min_length=1), "length constraints do not apply"),
+        ("abcd", AnswerType.STRING, AnswerConstraints(max_length=3), "longer than the maximum"),
+        ([1, 2], AnswerType.ARRAY, AnswerConstraints(max_length=1), "longer than the maximum"),
+        ("5", AnswerType.ANY, AnswerConstraints(minimum=1), "numeric constraints do not apply"),
+        (True, AnswerType.ANY, AnswerConstraints(maximum=1), "numeric constraints do not apply"),
+        ("x", AnswerType.STRING, AnswerConstraints(choices=("y", "z")), "not one of the allowed"),
+    ],
+)
+def test_answer_validation_reports_the_specific_violated_constraint(
+    value, answer_type, constraints, reason
+):
+    result = validate_answer(value, answer_type, constraints, 100)
+    assert result is not None and reason in result
+
+
+@pytest.mark.parametrize(
+    ("value", "answer_type", "constraints"),
+    [
+        ("abc", AnswerType.STRING, AnswerConstraints(min_length=1, max_length=3)),
+        ({"a": 1}, AnswerType.OBJECT, AnswerConstraints(max_length=1)),
+        (5, AnswerType.INTEGER, AnswerConstraints(minimum=5)),
+        (2.5, AnswerType.NUMBER, AnswerConstraints(minimum=1, maximum=2.5)),
+        ({"b": 2, "a": 1}, AnswerType.OBJECT, AnswerConstraints(choices=({"a": 1, "b": 2},))),
+    ],
+)
+def test_answers_satisfying_their_constraints_are_accepted(value, answer_type, constraints):
+    assert validate_answer(value, answer_type, constraints, 100) is None
+
+
 def test_answer_size_is_measured_as_utf8_json_bytes():
     assert validate_answer("é", AnswerType.STRING, AnswerConstraints(), 4) is None
     assert validate_answer("é", AnswerType.STRING, AnswerConstraints(), 3) is not None
@@ -103,6 +137,64 @@ def test_response_normalization_and_untrusted_schema():
     ):
         with pytest.raises(ModelResponseError):
             normalize_response(invalid, EngineConfig())
+
+
+def lineage(operation, parents, successors=()):
+    return {"operation": operation, "parent_keys": parents, "successor_keys": successors}
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        {"requirements": [proposal(conflicts=["Linux"])]},
+        {"requirements": [proposal(conflicts=["Linux", "Linux"])]},
+        {"requirements": [proposal(conflicts=["Linux", " "])]},
+        {"requirements": [proposal(necessity="may_assume", assumption=None)]},
+        {"requirements": [proposal()], "lineage": [lineage("split", ["a", "a"], ["b", "c"])]},
+        {"requirements": [proposal()], "lineage": [lineage("supersede", ["a"], ["a"])]},
+        {"requirements": [proposal()], "lineage": [lineage("split", ["a"], ["b"])]},
+        {"requirements": [proposal()], "lineage": [lineage("merge", ["a"], ["b"])]},
+        {"requirements": [proposal()], "lineage": [lineage("supersede", ["a"], ["b", "c"])]},
+        {"requirements": [proposal()], "lineage": [lineage("retire", ["a"], ["b"])]},
+    ],
+)
+def test_structurally_inconsistent_proposals_are_rejected(response):
+    with pytest.raises(ModelResponseError, match="not valid discovery JSON"):
+        normalize_response(response, EngineConfig())
+
+
+@pytest.mark.parametrize(
+    ("response", "limits", "message"),
+    [
+        (
+            json.dumps({"requirements": [proposal()]}),
+            Limits(max_input_bytes=8),
+            "configured size limit",
+        ),
+        ({"requirements": [proposal()]}, Limits(max_input_bytes=8), "configured size limit"),
+        (
+            {"requirements": [proposal(), proposal(key="region")]},
+            Limits(max_requirements=1),
+            "requirement limit",
+        ),
+        (
+            {"requirements": [proposal(dependencies=["region"])]},
+            Limits(max_dependency_edges=0),
+            "dependency edge limit",
+        ),
+        (
+            {
+                "requirements": [proposal()],
+                "lineage": [lineage("retire", ["a"]), lineage("retire", ["b"])],
+            },
+            Limits(max_requirements=1),
+            "lineage limit",
+        ),
+    ],
+)
+def test_model_responses_exceeding_configured_bounds_are_rejected(response, limits, message):
+    with pytest.raises(ModelResponseError, match=message):
+        normalize_response(response, EngineConfig(limits=limits))
 
 
 async def test_transient_model_retry_is_bounded_and_validation_is_not_retried():
@@ -201,6 +293,60 @@ async def test_embedding_failure_preserves_questions_and_warns():
 class SimilarEmbedding(EmbeddingModelABC):
     async def embed(self, texts):
         return [[1.0, 0.0] for _ in texts]
+
+
+class StaticEmbedding(EmbeddingModelABC):
+    def __init__(self, vectors):
+        self.vectors = vectors
+
+    async def embed(self, texts):
+        return self.vectors
+
+
+class InconsistentFloat(float):
+    """A float subtype whose arithmetic violates the normalized cosine range."""
+
+    def __truediv__(self, other):
+        return 2.0
+
+
+@pytest.mark.parametrize(
+    "vectors",
+    [
+        [[1.0, 0.0]],
+        [],
+        [[], []],
+        [[1.0, 0.0], [1.0]],
+        [[1.0, True], [1.0, 0.0]],
+        [[1.0, "0"], [1.0, 0.0]],
+        [[0.0, 0.0], [1.0, 0.0]],
+        [[1.7e308, 1.7e308], [1.0, 0.0]],
+        [[InconsistentFloat(1.0)], [InconsistentFloat(1.0)]],
+    ],
+)
+async def test_invalid_embedding_vectors_fall_back_to_conservative_matching(vectors):
+    first = question()
+    second = question("Which platform is prohibited?", requirement_ids=first.requirement_ids)
+    kept, warnings = await deduplicate_questions([first, second], StaticEmbedding(vectors))
+    assert kept == (first, second)
+    assert [warning.code for warning in warnings] == ["embedding_unavailable"]
+
+
+async def test_dissimilar_embeddings_produce_no_duplicate_warning():
+    first = question("Which platform should be used?")
+    second = question("Which platform should be used now?", requirement_ids=first.requirement_ids)
+    kept, warnings = await deduplicate_questions(
+        [first, second], StaticEmbedding([[1.0, 0.0], [0.0, 1.0]])
+    )
+    assert kept == (first, second)
+    assert warnings == ()
+
+
+async def test_repeated_question_identity_is_kept_once():
+    first = question()
+    kept, warnings = await deduplicate_questions([first, first])
+    assert kept == (first,)
+    assert warnings == ()
 
 
 async def test_semantic_candidate_is_reported_without_suppressing_a_distinct_question():

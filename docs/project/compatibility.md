@@ -1,13 +1,13 @@
 # Compatibility
 
-Sufficiency Engine is in its 0.x series. This page states what may change
-between releases and how stored sessions are protected across upgrades.
+Sufficiency Engine is stable and follows [semantic versioning](https://semver.org/)
+from 1.0.0. This page states what may change between releases and how stored sessions are protected across upgrades.
 
 ## Supported versions
 
 | Component | Supported |
 | --- | --- |
-| Python | 3.12, 3.13, and 3.14, tested on Linux and Windows |
+| Python | 3.12, 3.13, 3.14, and 3.15, tested on Linux and Windows |
 | AGXAI | `>=1.0.2,<2` |
 | Pydantic | `>=2.14.3,<3` |
 | LangGraph (optional) | `>=1.2.20,<2` |
@@ -15,10 +15,10 @@ between releases and how stored sessions are protected across upgrades.
 
 ## Public API
 
-The public API is everything in the [API reference](../api/index.md). Before
-1.0, a minor release (0.x to 0.y) may change it; every such change is listed in
-the [changelog](changelog.md) with what to update. A patch release does not
-change the public API. Names that start with an underscore are private.
+The public API is everything in the [API reference](../api/index.md). Only a major
+release (1.x to 2.0) removes or changes it incompatibly, and the
+[changelog](changelog.md) lists every such change with what to update. Minor
+releases only add to it; patch releases do not change it. Names that start with an underscore are private.
 
 ## Stored sessions
 

@@ -854,7 +854,8 @@ class SufficiencyEngine:
 
     async def _commit_audit(self, state: AssessmentState) -> None:
         intent = state.pending_audit
-        if intent is None:
+        # Both callers (execute and the LangGraph audit node) check pending_audit first.
+        if intent is None:  # pragma: no cover
             raise SerializationError("session has no pending audit intent")
         started = time.perf_counter()
         try:

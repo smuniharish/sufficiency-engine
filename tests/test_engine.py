@@ -1,5 +1,6 @@
 import asyncio
 import json
+from typing import Any
 from uuid import uuid4, uuid5
 
 import pytest
@@ -23,7 +24,8 @@ from sufficiency_engine.exceptions import (
     SerializationError,
     SessionConflictError,
 )
-from sufficiency_engine.models import AnswerStatus, AssumptionStatus, QuestionStatus
+from sufficiency_engine.models import Answer, AnswerStatus, AssumptionStatus, QuestionStatus
+from sufficiency_engine.persistence import InMemoryPersistence
 from sufficiency_engine.provenance import InMemorySemanticArchive
 
 
@@ -798,3 +800,481 @@ async def test_malformed_standalone_response_consumes_persisted_interaction_budg
     assert second.status is AssessmentStatus.ITERATION_LIMIT_REACHED
     assert second.iteration_count == 2
     assert second.provenance is not None
+
+
+SOURCE = uuid4()
+
+
+def answer_all(value):
+    def interrupt(payload):
+        return InteractionResponse(
+            answers=tuple(
+                AnswerSubmission(
+                    question_id=question.id,
+                    values={requirement_id: value for requirement_id in question.requirement_ids},
+                )
+                for question in payload.questions
+            )
+        )
+
+    return interrupt
+
+
+def failing_interrupt(_payload):
+    raise RuntimeError("delivery outcome unknown")
+
+
+async def edit_stored_state(engine, session_id, mutate):
+    scope = engine._scope(session_id)
+    claim = await engine.persistence.acquire(scope, uuid4(), 60)
+    try:
+        stored = await engine.persistence.load(scope)
+        assert stored is not None
+        mutate(stored.state)
+        await engine.persistence.save(
+            scope, stored.state, expected_revision=stored.revision, claim=claim
+        )
+    finally:
+        await engine.persistence.release(scope, claim)
+
+
+@pytest.mark.parametrize(
+    ("options", "message"),
+    [
+        ({"model_call": "not callable"}, "model_call must be callable"),
+        ({"interrupt_call": 1}, "interrupt_call must be callable"),
+        ({"command_call": 1}, "command_call must be callable"),
+        ({"telemetry_call": 1}, "telemetry_call must be callable"),
+        ({"max_iterations": -1}, "invalid engine configuration"),
+        ({"max_model_retries": 11}, "invalid engine configuration"),
+        ({"tenant_id": "tenant with spaces"}, "invalid engine configuration"),
+        ({"application_id": ""}, "invalid engine configuration"),
+        ({"persistence": object()}, "persistence must implement PersistenceABC"),
+        ({"audit": object()}, "audit must be an AGXAIAudit"),
+        ({"embedding_model": object()}, "embedding_model must implement EmbeddingModelABC"),
+    ],
+)
+def test_invalid_engine_configuration_is_rejected(options, message):
+    with pytest.raises(ConfigurationError, match=message):
+        arguments: dict[str, Any] = {"model_call": fake_model([]), **options}
+        SufficiencyEngine(**arguments)
+
+
+@pytest.mark.parametrize(
+    ("options", "message"),
+    [
+        ({"input": "   "}, "nonempty text"),
+        ({"input": None}, "nonempty text"),
+        ({"input": "Deploy", "resume": True}, "requires a session ID"),
+        ({"input": "Deploy", "response": InteractionResponse()}, "requires resume=True"),
+        ({"input": "Deploy", "session_id": "not/opaque"}, "opaque identifier"),
+        ({"input": "Deploy", "session_id": "missing", "resume": True}, "does not exist"),
+        (
+            {
+                "input": "Deploy",
+                "session_id": "refs",
+                "source_references": (uuid4(), uuid4(), SOURCE),
+            },
+            "source reference limit",
+        ),
+        (
+            {"input": "Deploy", "session_id": "refs", "source_references": (str(SOURCE),)},
+            "must be UUIDs",
+        ),
+        (
+            {"input": "Deploy", "session_id": "refs", "source_references": (SOURCE, SOURCE)},
+            "must be unique",
+        ),
+    ],
+)
+async def test_invalid_execute_arguments_are_rejected_without_creating_sessions(options, message):
+    engine = SufficiencyEngine(
+        model_call=fake_model([proposal()]), limits=Limits(max_requirements=2)
+    )
+    with pytest.raises(ConfigurationError, match=message):
+        await engine.execute(**options)
+    for session_id in ("missing", "refs"):
+        assert await engine.persistence.load(engine._scope(session_id)) is None
+
+
+async def test_existing_session_must_be_resumed_with_matching_inputs():
+    engine = SufficiencyEngine(
+        model_call=fake_model([proposal(status="available", evidence_quote="Linux")])
+    )
+    result = await engine.execute(input="Linux", session_id="existing", source_references=(SOURCE,))
+    with pytest.raises(SessionConflictError, match="already exists"):
+        await engine.execute(input="Linux", session_id="existing")
+    with pytest.raises(ConfigurationError, match="does not match"):
+        await engine.execute(input="Windows", session_id="existing", resume=True)
+    with pytest.raises(ConfigurationError, match="source references do not match"):
+        await engine.execute(
+            input="Linux", session_id="existing", resume=True, source_references=(uuid4(),)
+        )
+    with pytest.raises(ConfigurationError, match="finished assessment"):
+        await engine.execute(
+            input="Linux", session_id="existing", resume=True, response=InteractionResponse()
+        )
+    resumed = await engine.execute(
+        input="Linux", session_id="existing", resume=True, source_references=(SOURCE,)
+    )
+    assert resumed == result
+
+
+class BrokenPersistence(InMemoryPersistence):
+    async def load(self, scope):
+        raise RuntimeError("private database detail")
+
+
+async def test_unexpected_persistence_failure_is_wrapped_and_claim_released():
+    engine = SufficiencyEngine(model_call=fake_model([proposal()]), persistence=BrokenPersistence())
+    with pytest.raises(PersistenceError, match="persistence operation failed") as raised:
+        await engine.execute(input="Deploy", session_id="broken")
+    assert "private" not in str(raised.value)
+    assert isinstance(raised.value.__cause__, RuntimeError)
+    claim = await engine.persistence.acquire(engine._scope("broken"), uuid4(), 60)
+    assert claim.fence == 2
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    [
+        (lambda state: state.update(schema_version=999), "unsupported schema"),
+        (lambda state: state["scope"].update(session_id="other"), "scope does not match"),
+    ],
+)
+async def test_deleting_a_corrupted_session_fails_without_removing_it(mutate, message):
+    engine = SufficiencyEngine(
+        model_call=fake_model([proposal(status="available", evidence_quote="Linux")])
+    )
+    await engine.execute(input="Linux", session_id="corrupt")
+    await edit_stored_state(engine, "corrupt", mutate)
+    with pytest.raises(SerializationError, match=message):
+        await engine.delete_session("corrupt")
+    assert await engine.persistence.load(engine._scope("corrupt")) is not None
+
+
+async def test_deleting_an_unknown_session_is_a_no_op():
+    engine = SufficiencyEngine(model_call=fake_model([]))
+    await engine.delete_session("unknown")
+    assert await engine.persistence.load(engine._scope("unknown")) is None
+
+
+async def test_finished_session_without_result_is_rejected_on_resume():
+    engine = SufficiencyEngine(
+        model_call=fake_model([proposal(status="available", evidence_quote="Linux")])
+    )
+    await engine.execute(input="Linux", session_id="no-result")
+    await edit_stored_state(engine, "no-result", lambda state: state.update(result=None))
+    with pytest.raises(SerializationError, match="no result"):
+        await engine.execute(input="Linux", session_id="no-result", resume=True)
+
+
+async def test_pending_terminal_audit_without_status_is_rejected_on_resume():
+    engine = SufficiencyEngine(
+        model_call=fake_model([proposal(status="available", evidence_quote="Linux")]),
+        audit=AGXAIAudit(archive=FlakyArchive()),
+    )
+    failed = await engine.execute(input="Linux", session_id="no-status")
+    assert failed.errors[-1].code == "provenance_error"
+    await edit_stored_state(engine, "no-status", lambda state: state.update(terminal_status=None))
+    with pytest.raises(SerializationError, match="no terminal status"):
+        await engine.execute(input="Linux", session_id="no-status", resume=True)
+
+
+async def test_stored_requirement_without_discovery_contract_fails_reassessment():
+    item = proposal()
+    engine = SufficiencyEngine(model_call=fake_model([item]), interrupt_call=failing_interrupt)
+    waiting = await engine.execute(input="Deploy", session_id="contract")
+    await edit_stored_state(engine, "contract", lambda state: state.update(proposals=[]))
+    result = await engine.execute(
+        input="Deploy",
+        session_id="contract",
+        resume=True,
+        response=submission(waiting, "Linux"),
+    )
+    assert result.status is AssessmentStatus.FAILED
+    assert result.errors[-1].code == "serialization_error"
+    assert "discovery contract" in result.errors[-1].message
+
+
+async def test_question_for_unknown_stored_requirement_is_rejected():
+    shared = "Which platform and region?"
+    platform = proposal(question=shared)
+    region = proposal(key="region", description="Deployment region", question=shared)
+    engine = SufficiencyEngine(
+        model_call=fake_model([platform, region]), interrupt_call=failing_interrupt
+    )
+    waiting = await engine.execute(input="Deploy", session_id="dangling")
+    assert len(waiting.questions[0].requirement_ids) == 2
+
+    def drop_region(state):
+        state["requirements"] = [item for item in state["requirements"] if item["key"] != "region"]
+
+    await edit_stored_state(engine, "dangling", drop_region)
+    result = await engine.execute(
+        input="Deploy",
+        session_id="dangling",
+        resume=True,
+        response=submission(waiting, "Linux"),
+    )
+    assert result.status is AssessmentStatus.FAILED
+    assert result.errors[-1].code == "clarification_error"
+    assert not result.answers
+
+
+@pytest.mark.parametrize("corrected", [False, True])
+async def test_answer_conflicting_with_a_prior_valid_answer_requires_correction(corrected):
+    item = proposal()
+    engine = SufficiencyEngine(
+        model_call=fake_model([item], [available(item, "Linux") if corrected else item]),
+        interrupt_call=failing_interrupt,
+        max_iterations=1,
+    )
+    waiting = await engine.execute(input="Deploy", session_id="prior")
+    question = waiting.questions[0]
+    requirement_id = question.requirement_ids[0]
+    prior = Answer(
+        question_id=question.id,
+        requirement_id=requirement_id,
+        value="Windows",
+        status=AnswerStatus.VALID,
+    )
+    await edit_stored_state(
+        engine, "prior", lambda state: state["answers"].append(prior.model_dump(mode="json"))
+    )
+    response = InteractionResponse(
+        answers=(
+            AnswerSubmission(
+                question_id=question.id,
+                values={requirement_id: "Linux"},
+                corrections=(requirement_id,) if corrected else (),
+            ),
+        )
+    )
+    result = await engine.execute(
+        input="Deploy", session_id="prior", resume=True, response=response
+    )
+    if corrected:
+        assert result.sufficient
+        assert [answer.status for answer in result.answers] == [
+            AnswerStatus.CONTRADICTORY,
+            AnswerStatus.VALID,
+        ]
+    else:
+        assert result.status is AssessmentStatus.ITERATION_LIMIT_REACHED
+        assert result.answers[-1].status is AnswerStatus.CONTRADICTORY
+        assert result.answers[-1].reason == "Answer conflicts with a prior answer."
+        assert result.questions[0].status is QuestionStatus.INVALID
+
+
+def supersede(parent, successor):
+    return {"operation": "supersede", "parent_keys": [parent], "successor_keys": [successor]}
+
+
+@pytest.mark.parametrize(
+    ("responses", "options", "code", "message"),
+    [
+        (
+            [[proposal(status="available", evidence_quote="  ")]],
+            {},
+            "model_response_error",
+            "empty evidence quote",
+        ),
+        (
+            [[proposal()], [proposal(status="available", evidence_quote="Windows")]],
+            {},
+            "model_response_error",
+            "not supplied",
+        ),
+        (
+            [[proposal()], [proposal(classification="optional")]],
+            {},
+            "model_response_error",
+            "changed classification",
+        ),
+        (
+            [[proposal(dependencies=["missing"])]],
+            {},
+            "model_response_error",
+            "unknown dependency",
+        ),
+        (
+            [
+                [proposal(), proposal(key="region", description="Region")],
+                {
+                    "requirements": [proposal(), proposal(key="region", description="Region")],
+                    "lineage": [supersede("platform", "region")],
+                },
+            ],
+            {},
+            "model_response_error",
+            "ambiguous or unknown requirement lineage",
+        ),
+        (
+            [
+                [proposal()],
+                {
+                    "requirements": [proposal(key="runtime")],
+                    "lineage": [supersede("platform", "runtime")],
+                },
+                {"requirements": [proposal(key="os")], "lineage": [supersede("platform", "os")]},
+            ],
+            {},
+            "model_response_error",
+            "lineage parent is inactive",
+        ),
+        (
+            [
+                [
+                    proposal(dependencies=["region"]),
+                    proposal(key="region", dependencies=["platform"]),
+                ]
+            ],
+            {},
+            "invalid_dependencies",
+            "dependency cycle",
+        ),
+        (
+            [[proposal(), proposal(key="region", question="Which region?")]],
+            {"limits": Limits(max_questions=1)},
+            "clarification_error",
+            "pending question limit",
+        ),
+    ],
+)
+async def test_unsafe_discovery_or_reassessment_fails_closed(responses, options, code, message):
+    result = await SufficiencyEngine(
+        model_call=fake_model(*responses), interrupt_call=answer_all("Linux"), **options
+    ).execute(input="Deploy the service")
+    assert result.status is AssessmentStatus.FAILED
+    assert not result.sufficient
+    assert result.errors[-1].code == code
+    assert message in result.errors[-1].message
+    assert result.provenance is not None
+
+
+async def test_superseded_dependency_is_replaced_by_its_successor():
+    service = proposal(
+        key="service",
+        description="Service to deploy",
+        status="available",
+        evidence_quote="service",
+        necessity="not_needed",
+        dependencies=["platform"],
+    )
+    platform = proposal()
+    runtime = proposal(key="runtime", description="Runtime operating system")
+    result = await SufficiencyEngine(
+        model_call=fake_model(
+            [service, platform],
+            {
+                "requirements": [service, available(runtime, "Linux")],
+                "lineage": [supersede("platform", "runtime")],
+            },
+        ),
+        interrupt_call=answer_all("Linux"),
+    ).execute(input="Deploy the service")
+    assert result.sufficient
+    by_key = {item.key: item for item in result.requirements}
+    assert by_key["platform"].lifecycle.value == "superseded"
+    assert by_key["service"].dependencies == (by_key["runtime"].id,)
+
+
+async def test_rejected_assumption_is_not_offered_again():
+    item = proposal(
+        necessity="may_assume",
+        answer_type="integer",
+        question=None,
+        assumption={"description": "One replica", "value": 1, "risk": "low", "reversible": True},
+    )
+    calls = 0
+
+    async def reject(payload):
+        nonlocal calls
+        calls += 1
+        return InteractionResponse(assumption_approvals={payload.assumptions[0].id: False})
+
+    result = await SufficiencyEngine(
+        model_call=fake_model([item], [item]), interrupt_call=reject, allow_assumptions=True
+    ).execute(input="Deploy the service")
+    assert result.status is AssessmentStatus.INSUFFICIENT
+    assert result.assumptions[0].status is AssumptionStatus.REJECTED
+    assert result.blocking_requirements[0].status.value == "unresolved"
+    assert calls == 1
+
+
+def unknown_question(payload):
+    return InteractionResponse(answers=(AnswerSubmission(question_id=uuid4()),))
+
+
+def duplicate_question(payload):
+    answer = AnswerSubmission(question_id=payload.questions[0].id)
+    return InteractionResponse(answers=(answer, answer))
+
+
+def unknown_assumption(payload):
+    return InteractionResponse(assumption_approvals={uuid4(): True})
+
+
+def foreign_slot(payload):
+    return InteractionResponse(
+        answers=(AnswerSubmission(question_id=payload.questions[0].id, values={uuid4(): "x"}),)
+    )
+
+
+def provided_and_declined(payload):
+    question = payload.questions[0]
+    requirement_id = question.requirement_ids[0]
+    return InteractionResponse(
+        answers=(
+            AnswerSubmission(
+                question_id=question.id,
+                values={requirement_id: "Linux"},
+                declined=(requirement_id,),
+            ),
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    "respond",
+    [unknown_question, duplicate_question, unknown_assumption, foreign_slot, provided_and_declined],
+)
+async def test_inconsistent_responses_are_rejected_without_accepting_answers(respond):
+    result = await SufficiencyEngine(
+        model_call=fake_model([proposal()]), interrupt_call=respond
+    ).execute(input="Deploy")
+    assert result.status is AssessmentStatus.FAILED
+    assert result.errors[-1].code == "clarification_error"
+    assert result.iteration_count == 1
+    assert not result.answers
+    assert result.requirements[0].status.value == "unresolved"
+
+
+async def test_ambiguous_answer_gets_a_followup_question():
+    item = proposal()
+    payloads = []
+
+    async def interrupt(payload):
+        payloads.append(payload)
+        question = payload.questions[0]
+        if len(payloads) == 1:
+            return InteractionResponse(
+                answers=(
+                    AnswerSubmission(question_id=question.id, ambiguous=question.requirement_ids),
+                )
+            )
+        return submission(payload, "Linux")
+
+    result = await SufficiencyEngine(
+        model_call=fake_model([item], [item], [available(item, "Linux")]),
+        interrupt_call=interrupt,
+    ).execute(input="Deploy the service")
+    assert result.sufficient
+    assert [answer.status for answer in result.answers] == [
+        AnswerStatus.AMBIGUOUS,
+        AnswerStatus.VALID,
+    ]
+    assert result.answers[0].reason == "Answer is ambiguous."
+    assert result.questions[0].status is QuestionStatus.INVALID
+    assert payloads[1].questions[0].follow_up_to == payloads[0].questions[0].id

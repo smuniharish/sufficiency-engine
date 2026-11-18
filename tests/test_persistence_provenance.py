@@ -163,3 +163,75 @@ async def test_mismatched_audit_scope_is_rejected():
             run_id=pending.execution.context.run_id,
         )
     )
+
+
+@pytest.mark.parametrize("lease_seconds", [0, -1, float("inf"), float("nan")])
+async def test_claim_leases_must_be_positive_and_finite(lease_seconds):
+    store = InMemoryPersistence()
+    with pytest.raises(ValueError, match="lease_seconds"):
+        await store.acquire(scope(), uuid4(), lease_seconds)
+    claim = await store.acquire(scope(), uuid4(), 60)
+    with pytest.raises(ValueError, match="lease_seconds"):
+        await store.renew(scope(), claim, lease_seconds)
+
+
+@pytest.mark.parametrize("state", [["not", "an", "object"], {1: "non-string key"}])
+async def test_state_must_round_trip_as_a_json_object(state):
+    store = InMemoryPersistence()
+    claim = await store.acquire(scope(), uuid4(), 60)
+    with pytest.raises(SerializationError, match="not JSON serializable"):
+        await store.save(scope(), state, expected_revision=None, claim=claim)
+    assert await store.load(scope()) is None
+
+
+async def test_stale_claims_and_revisions_cannot_renew_or_delete():
+    store = InMemoryPersistence()
+    claim = await store.acquire(scope(), uuid4(), 60)
+    await store.save(scope(), {"ok": True}, expected_revision=None, claim=claim)
+    with pytest.raises(SessionConflictError, match="revision changed"):
+        await store.delete(scope(), expected_revision=2, claim=claim)
+    await store.release(scope(), claim)
+    with pytest.raises(SessionConflictError, match="expired or superseded"):
+        await store.renew(scope(), claim, 60)
+    with pytest.raises(SessionConflictError, match="expired or superseded"):
+        await store.delete(scope(), expected_revision=1, claim=claim)
+    assert await store.load(scope()) is not None
+
+
+async def test_archive_rejects_ambiguous_artifact_ids_within_a_run():
+    audit = AGXAIAudit()
+    pending = intent(audit)
+    evidence = pending.evidence[0]
+    await audit.archive.record(evidence)
+    await audit.archive.record(pending.decision.model_copy(update={"id": evidence.id}))
+    with pytest.raises(LookupError, match="ambiguous"):
+        await audit.archive.get(evidence.id, context=pending.execution.context)
+
+
+@pytest.mark.parametrize(
+    ("options", "error", "message"),
+    [
+        ({"operation_timeout": 0}, ValueError, "operation_timeout"),
+        ({"observer": object()}, TypeError, "observability provider"),
+        ({"store": object()}, TypeError, "provenance store"),
+        ({"archive": object()}, TypeError, "semantic archive"),
+    ],
+)
+def test_invalid_audit_configuration_is_rejected(options, error, message):
+    with pytest.raises(error, match=message):
+        AGXAIAudit(**options)
+
+
+def test_unsupported_audit_action_is_rejected():
+    audit = AGXAIAudit()
+    with pytest.raises(ValueError, match="unsupported audit action"):
+        audit.prepare(
+            scope=scope(),
+            run_id=uuid4(),
+            assessment_id=uuid4(),
+            started_at=datetime.now(UTC),
+            step=0,
+            action="executed",
+            requirements=[],
+            terminal=False,
+        )

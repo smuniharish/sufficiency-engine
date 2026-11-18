@@ -8,7 +8,8 @@
   <a href="https://github.com/smuniharish/sufficiency-engine/actions/workflows/ci.yml"><img src="https://github.com/smuniharish/sufficiency-engine/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://sufficiency-engine.readthedocs.io/"><img src="https://readthedocs.org/projects/sufficiency-engine/badge/?version=latest" alt="Documentation"></a>
   <a href="https://pypi.org/project/sufficiency-engine/"><img src="https://img.shields.io/pypi/v/sufficiency-engine.svg" alt="PyPI"></a>
-  <a href="https://pypi.org/project/sufficiency-engine/"><img src="https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-blue.svg" alt="Python 3.12 | 3.13 | 3.14"></a>
+  <a href="https://pypi.org/project/sufficiency-engine/"><img src="https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14%20%7C%203.15-blue.svg" alt="Python 3.12 | 3.13 | 3.14 | 3.15"></a>
+  <img src="https://img.shields.io/badge/coverage-100%25-brightgreen.svg" alt="Coverage 100%">
   <img src="https://img.shields.io/badge/typing-typed-blue.svg" alt="Typed">
   <a href="https://github.com/smuniharish/sufficiency-engine/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License: Apache 2.0"></a>
 </p>
@@ -68,7 +69,7 @@ the conversation, the workflow, and the task itself.
   embeddings plug in through abstract base classes.
 - **Bounded and typed.** Input sizes, requirement counts, dependency edges,
   questions, and iterations are limited by default. The package ships type
-  hints and is tested on Python 3.12 to 3.14.
+  hints and is tested on Python 3.12 to 3.15.
 
 ## Installation
 
@@ -233,8 +234,8 @@ models:
 npx skills add smuniharish/sufficiency-engine
 ```
 
-Sufficiency Engine is in its 0.x series: minor releases may change the API, and
-stored sessions are versioned. See [Compatibility](https://sufficiency-engine.readthedocs.io/en/latest/project/compatibility/)
+Sufficiency Engine is stable and follows semantic versioning: only a major
+release changes the public API incompatibly, and stored sessions are versioned. See [Compatibility](https://sufficiency-engine.readthedocs.io/en/latest/project/compatibility/)
 and the [changelog](https://github.com/smuniharish/sufficiency-engine/blob/main/CHANGELOG.md).
 
 > [!WARNING]

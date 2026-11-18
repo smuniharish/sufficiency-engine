@@ -10,11 +10,11 @@ description: >-
   executor or conversation database.
 license: Apache-2.0
 compatibility: >-
-  Python 3.12+. Requires sufficiency-engine 0.1.x. Contract checks are offline
+  Python 3.12+. Requires sufficiency-engine 1.x. Contract checks are offline
   with default in-memory factories. Explicit custom factories execute trusted
   application code and may access the configured isolated test backend.
 metadata:
-  version: "0.1.0"
+  version: "1.0.0"
 ---
 
 # Extend application-owned storage and embeddings

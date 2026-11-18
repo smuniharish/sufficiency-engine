@@ -11,11 +11,11 @@ description: >-
   sufficiency-engine-extend for extension contracts.
 license: Apache-2.0
 compatibility: >-
-  Python 3.12+. Requires sufficiency-engine 0.1.x and its mandatory AGXAI
+  Python 3.12+. Requires sufficiency-engine 1.x and its mandatory AGXAI
   dependency. LangGraph integration requires the langgraph extra. The setup
   script is offline and imports LangGraph only with --langgraph.
 metadata:
-  version: "0.1.0"
+  version: "1.0.0"
 ---
 
 # Integrate task readiness

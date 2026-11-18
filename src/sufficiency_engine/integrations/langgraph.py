@@ -47,7 +47,8 @@ def build_assessment_graph(
 
     async def prepare(state: AssessmentGraphState) -> dict[str, JsonValue]:
         task = state.task
-        if not isinstance(task, str):
+        # AssessmentGraphState validation rejects non-string tasks before nodes run.
+        if not isinstance(task, str):  # pragma: no cover
             raise ConfigurationError("graph state must include a task")
         saved = state.assessment
         if saved is None:

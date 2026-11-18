@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 1.0.0
+
+First stable release. The public API and the stored-session format follow
+semantic versioning from this release.
+
 
 - Add async task-readiness assessment, deterministic policy, clarification,
   session recovery, and strict AGXAI provenance.
@@ -11,7 +15,7 @@
 - Keep task-level source references without asserting per-requirement support.
 - Add repository-distributed usage/extension Agent Skills, labeled evaluation
   tools, lifecycle properties, storage conformance checks, and PostgreSQL CI.
-- Document pre-1.0 API/state compatibility and deployment acceptance boundaries.
+- Document API/state compatibility and deployment acceptance boundaries.
 - Add Mermaid diagram sources under `diagrams/` with rendered images, a
   renderer, and a CI staleness check.
 - Restructure the documentation into getting started, user guide (concepts,
@@ -31,5 +35,7 @@
   test locally against a disposable Podman or Docker container.
 - Record coding-agent evaluations of both Agent Skills, with and without the
   skill.
+- Test on Python 3.15 and require 100% line and branch coverage of the whole
+  package in CI.
 - Add the author email, keywords, classifiers, and documentation, changelog,
   and issue URLs to the package metadata; document installation from PyPI.

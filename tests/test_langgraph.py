@@ -1,11 +1,13 @@
 import json
 
+import pytest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 
 from sufficiency_engine import AGXAIAudit, AssessmentResult, SufficiencyEngine
+from sufficiency_engine.exceptions import ConfigurationError
 from sufficiency_engine.integrations.langgraph import build_assessment_graph
 from sufficiency_engine.provenance import InMemorySemanticArchive
 
@@ -135,3 +137,50 @@ async def test_repeated_malformed_resumes_exhaust_checkpointed_iteration_budget(
     assert len(result.warnings) == 2
     assert len(calls) == 1
     assert (await graph.aget_state(config)).values["assessment"]["pending_audit"] is None
+
+
+async def test_graph_rejects_invalid_or_mismatched_entry_state():
+    graph = build_assessment_graph(
+        SufficiencyEngine(model_call=model_with_calls([])), checkpointer=InMemorySaver()
+    )
+    with pytest.raises(ConfigurationError, match="must be UUIDs"):
+        await graph.ainvoke(
+            {"task": "Deploy", "source_references": ["not-a-uuid"]},
+            {"configurable": {"thread_id": "bad-reference"}},
+        )
+    with pytest.raises(ConfigurationError, match="assessment state is invalid"):
+        await graph.ainvoke(
+            {"task": "Deploy", "assessment": {"phase": "unknown"}},
+            {"configurable": {"thread_id": "bad-assessment"}},
+        )
+    first = await graph.ainvoke(
+        {"task": "Deploy", "session_id": "original"}, {"configurable": {"thread_id": "original"}}
+    )
+    with pytest.raises(ConfigurationError, match="does not match"):
+        await graph.ainvoke(
+            {"task": "Deploy elsewhere", "assessment": first["assessment"]},
+            {"configurable": {"thread_id": "mismatch"}},
+        )
+    with pytest.raises(ConfigurationError, match="does not match"):
+        await graph.ainvoke(
+            {"task": "Deploy", "session_id": "other", "assessment": first["assessment"]},
+            {"configurable": {"thread_id": "other-session"}},
+        )
+
+
+async def test_graph_discovery_failure_produces_a_failed_readiness_result():
+    async def invalid_model(_messages):
+        return "not discovery JSON"
+
+    graph = build_assessment_graph(
+        SufficiencyEngine(model_call=invalid_model), checkpointer=InMemorySaver()
+    )
+    result = await graph.ainvoke(
+        {"task": "Deploy"}, {"configurable": {"thread_id": "invalid-model"}}
+    )
+    assert not result.get("__interrupt__")
+    readiness = AssessmentResult.model_validate(result["readiness"])
+    assert readiness.status.value == "failed"
+    assert not readiness.sufficient
+    assert readiness.errors[-1].code == "model_response_error"
+    assert readiness.provenance is not None

@@ -216,4 +216,5 @@ async def discover(
             raise
         except Exception as exc:
             raise ModelInvocationError("model callback failed") from exc
-    raise AssertionError("unreachable retry loop")
+    # EngineConfig validates max_model_retries >= 0, so every iteration returns or raises.
+    raise AssertionError("unreachable retry loop")  # pragma: no cover

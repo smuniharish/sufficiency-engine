@@ -19,16 +19,16 @@ so async tests need no decorator.
 
 ## Coverage
 
-Continuous integration requires 100% line and branch coverage of the readiness
-policy and the public models:
+Continuous integration requires 100% line and branch coverage of the whole
+package, on every supported Python version and operating system:
 
 ```bash
-uv run pytest --cov=sufficiency_engine.models --cov=sufficiency_engine.policy \
-    --cov-branch --cov-fail-under=100
+uv run pytest --cov=sufficiency_engine --cov-branch --cov-report=term-missing \
+    --cov-fail-under=100
 ```
 
-Run `uv run pytest --cov=sufficiency_engine --cov-branch` to see coverage of the
-whole package.
+The live model and PostgreSQL tests are skipped by default and are not needed
+to reach it.
 
 ## Layout
 

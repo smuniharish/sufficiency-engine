@@ -4,10 +4,12 @@ from opentelemetry.sdk.metrics.export import InMemoryMetricReader, Sum
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace import StatusCode
 
 from sufficiency_engine import AGXAIAudit, SufficiencyEngine
 from sufficiency_engine.exceptions import TransientModelError
 from sufficiency_engine.integrations.opentelemetry import OpenTelemetryObserver
+from sufficiency_engine.provenance import InMemorySemanticArchive
 
 
 async def test_real_otel_spans_metrics_agxai_events_and_sanitized_correlation():
@@ -119,3 +121,62 @@ async def test_optional_telemetry_failure_is_a_warning_and_does_not_invalidate_a
     assert result.provenance is not None
     assert any(warning.code == "telemetry_error" for warning in result.warnings)
     assert "sensitive" not in repr(result.warnings)
+
+
+class FlakyArchive(InMemorySemanticArchive):
+    async def record(self, artifact):
+        raise RuntimeError("archive unavailable")
+
+
+async def test_failed_provenance_marks_error_spans_and_counts_audit_failures():
+    exporter = InMemorySpanExporter()
+    tracer_provider = TracerProvider()
+    tracer_provider.add_span_processor(SimpleSpanProcessor(exporter))
+    reader = InMemoryMetricReader()
+    meter_provider = MeterProvider(metric_readers=[reader])
+    observer = OpenTelemetryObserver(tracer_provider=tracer_provider, meter_provider=meter_provider)
+
+    async def model(_messages):
+        return {
+            "requirements": [
+                {
+                    "key": "platform",
+                    "description": "Platform",
+                    "classification": "mandatory",
+                    "status": "available",
+                    "evidence_quote": "Linux",
+                    "reason": "Specified",
+                }
+            ]
+        }
+
+    result = await SufficiencyEngine(
+        model_call=model,
+        telemetry_call=observer.observe,
+        audit=AGXAIAudit(archive=FlakyArchive()),
+    ).execute(input="Linux")
+    assert result.status.value == "failed"
+    assert result.errors[-1].code == "provenance_error"
+    spans = {span.name: span for span in exporter.get_finished_spans()}
+    for name in ("sufficiency.provenance", "sufficiency.assessment"):
+        assert spans[name].status.status_code is StatusCode.ERROR
+        attributes = spans[name].attributes
+        assert attributes is not None
+        assert attributes["sufficiency.outcome"] == "failed"
+    assert spans["sufficiency.model"].status.status_code is StatusCode.UNSET
+    metrics_data = reader.get_metrics_data()
+    assert metrics_data is not None
+    metrics = {
+        metric.name: metric
+        for resource in metrics_data.resource_metrics
+        for scope in resource.scope_metrics
+        for metric in scope.metrics
+    }
+    failures = metrics["sufficiency.provenance.failures"].data
+    assert isinstance(failures, Sum)
+    assert failures.data_points[0].value == 1
+    assessments = metrics["sufficiency.assessments"].data
+    assert isinstance(assessments, Sum)
+    assert dict(assessments.data_points[0].attributes or {}) == {"outcome": "failed"}
+    meter_provider.shutdown()
+    tracer_provider.shutdown()
