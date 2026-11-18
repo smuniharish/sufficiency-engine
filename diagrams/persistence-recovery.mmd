@@ -1,0 +1,22 @@
+sequenceDiagram
+    autonumber
+    participant A as Worker A
+    participant Store as PersistenceABC
+    participant B as Worker B
+
+    A->>Store: acquire(scope, owner, lease)
+    Store-->>A: claim (fencing token 7)
+    B->>Store: acquire(scope, owner, lease)
+    Store-->>B: SessionConflictError
+    A->>Store: save(state, expected_revision=3, claim)
+    Store-->>A: revision 4
+    Note over A: Process stops before release
+    Note over Store: Lease expires
+    B->>Store: acquire(scope, owner, lease)
+    Store-->>B: claim (fencing token 8)
+    A->>Store: save(state, expected_revision=4, stale claim)
+    Store-->>A: SessionConflictError (claim superseded)
+    B->>Store: load(scope)
+    Store-->>B: revision 4 with pending audit or interaction marker
+    Note over B: Retry pending audit with the same IDs.<br/>A dispatched interaction is never replayed.<br/>Resume with an explicit response.
+    B->>Store: release(scope, claim)

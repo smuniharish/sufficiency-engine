@@ -1,0 +1,32 @@
+sequenceDiagram
+    autonumber
+    actor Host as Application
+    participant Engine as SufficiencyEngine
+    participant Store as PersistenceABC
+    participant Model as model_call
+    participant User as interrupt_call
+    participant Audit as AGXAI
+
+    Host->>Engine: execute(input, session_id)
+    Engine->>Store: acquire claim, load state
+    Engine->>Store: save new assessment
+    loop Until terminal or max_iterations
+        Engine->>Model: task, prior requirements, accepted answers
+        Model-->>Engine: proposed requirements (JSON)
+        Note over Engine: Validate schema and evidence quotes,<br/>reconcile identities, apply blocking policy
+        Engine->>Store: save state with prepared audit intent
+        Engine->>Audit: commit intent (idempotent, stable IDs)
+        Engine->>Store: save committed state
+        opt Blocking requirements remain
+            Engine->>Store: mark interaction dispatched
+            Engine->>User: ClarificationPayload
+            User-->>Engine: InteractionResponse
+            Note over Engine: Validate answers by type and constraints,<br/>bind each answer to its requirement
+            Engine->>Store: save answers
+        end
+    end
+    opt command_call configured
+        Engine->>Host: command_call(result), at most once
+    end
+    Engine->>Store: release claim
+    Engine-->>Host: AssessmentResult

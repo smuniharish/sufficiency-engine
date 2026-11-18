@@ -214,6 +214,9 @@ tempCodeRunnerFile.py
 # PyPI configuration file
 .pypirc
 
+# Local embedding model weights are never part of the distribution.
+/models/
+
 # Marimo
 marimo/_static/
 marimo/_lsp/
@@ -221,3 +224,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Live model evaluation reports may contain model output; never commit them.
+/reports/

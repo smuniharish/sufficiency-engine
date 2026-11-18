@@ -1,0 +1,18 @@
+{
+  "mermaidVersion": "12.2.0",
+  "renderOptions": {
+    "scale": 2,
+    "background": "white"
+  },
+  "configChecksum": "368285a037f89a1d8f942f9075a7fd19bdc3a15992cdd1290df4df5a7996fdf8",
+  "sources": {
+    "architecture-overview.mmd": "2077c74c2abc667a29683250a43261b368f236c9558859a7d4440117ff23b8f7",
+    "assessment-flow.mmd": "3745198b0d3160dc438754b1d5092e12f15fd9b8aff35538fdd35a1cc2600636",
+    "clarification-flow.mmd": "d5c421aa056fdf868eb6bc76a641a72023c055dc8bd42613ca7c1a53ad4a59f5",
+    "extensibility.mmd": "c27cc0eda15a93030ef780d02e26a379605d01bb2660291376f56982b80fdccb",
+    "langgraph-integration.mmd": "a32d9feb9714216005ede0a996bb5d669992093381702ca6d7af0cb49654691a",
+    "persistence-recovery.mmd": "c752294103323ca8b3982de1553d4683a54282ad741d0b24d1bbfa4b2c8557ab",
+    "provenance-flow.mmd": "6d775615702900b8861fedb28d9c128dde496e285532fc96a81d6349b7478c60",
+    "requirement-lifecycle.mmd": "c04eb29ab0774aaff362a30b784ea4eda24cced8ed6e860fa806e26476ebbcc6"
+  }
+}

@@ -1,0 +1,105 @@
+{
+  "skill_name": "sufficiency-engine",
+  "queries": [
+    {
+      "query": "add sufficiency-engine to my deployment assistant so it asks for missing details before running",
+      "should_trigger": true,
+      "split": "train"
+    },
+    {
+      "query": "put a readiness check in front of our langgraph supervisor so workers only start when the task is clear",
+      "should_trigger": true,
+      "split": "train"
+    },
+    {
+      "query": "how do i resume a sufficiency engine assessment after the user answers the clarification question",
+      "should_trigger": true,
+      "split": "train"
+    },
+    {
+      "query": "my SufficiencyEngine result stays insufficient even after we submitted the answer, why",
+      "should_trigger": true,
+      "split": "train"
+    },
+    {
+      "query": "wire our openai client into sufficiency engine as the model_call",
+      "should_trigger": true,
+      "split": "train"
+    },
+    {
+      "query": "the assessment failed with provenance_error, how do i recover it safely",
+      "should_trigger": true,
+      "split": "train"
+    },
+    {
+      "query": "use build_assessment_graph with our postgres checkpointer and Command resumes",
+      "should_trigger": true,
+      "split": "validation"
+    },
+    {
+      "query": "ask the user for missing mandatory requirements before my agent executes the task",
+      "should_trigger": true,
+      "split": "validation"
+    },
+    {
+      "query": "configure allow_assumptions and max_iterations for sufficiency-engine in production",
+      "should_trigger": true,
+      "split": "validation"
+    },
+    {
+      "query": "export sufficiency engine traces and metrics through opentelemetry",
+      "should_trigger": true,
+      "split": "validation"
+    },
+    {
+      "query": "implement PersistenceABC on our existing postgres database",
+      "should_trigger": false,
+      "split": "train"
+    },
+    {
+      "query": "write a SemanticArchiveABC that keeps agxai evidence across restarts",
+      "should_trigger": false,
+      "split": "train"
+    },
+    {
+      "query": "add an EmbeddingModelABC wrapper around our local sentence encoder",
+      "should_trigger": false,
+      "split": "train"
+    },
+    {
+      "query": "our custom session store accepts writes with stale fencing tokens, fix the adapter",
+      "should_trigger": false,
+      "split": "train"
+    },
+    {
+      "query": "build a conversation summarization database for our chatbot",
+      "should_trigger": false,
+      "split": "train"
+    },
+    {
+      "query": "intercept every tool call and model call to check readiness automatically",
+      "should_trigger": false,
+      "split": "train"
+    },
+    {
+      "query": "record evidence and decisions with agxai in my fraud graph",
+      "should_trigger": false,
+      "split": "validation"
+    },
+    {
+      "query": "set up a vector database for retrieval augmented generation",
+      "should_trigger": false,
+      "split": "validation"
+    },
+    {
+      "query": "write a langgraph supervisor that routes between research and coding workers",
+      "should_trigger": false,
+      "split": "validation"
+    },
+    {
+      "query": "implement the agxai ProvenanceStore interface for our event store",
+      "should_trigger": false,
+      "split": "validation"
+    }
+  ]
+}

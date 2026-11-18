@@ -1,0 +1,39 @@
+flowchart LR
+    classDef app fill:#ecf8f1,stroke:#2f8f5b,color:#0f2547
+    classDef core fill:#eef4ff,stroke:#3567c7,color:#0f2547
+    classDef provider fill:#fff7e8,stroke:#c98a12,color:#0f2547
+
+    subgraph Application["Your application"]
+        task["Task entry<br/>new task, session ID"]:::app
+        model["model_call<br/>any LLM provider"]:::app
+        ask["interrupt_call<br/>ask the user"]:::app
+        work["Supervisor, workers,<br/>and tools"]:::app
+    end
+
+    subgraph Engine["Sufficiency Engine"]
+        discover["Requirement discovery<br/>schema and evidence validation"]:::core
+        policy["Deterministic policy<br/>blocking, dependencies, assumptions"]:::core
+        clarify["Clarification<br/>questions, dedup, answer validation"]:::core
+        outbox["Audit outbox<br/>prepared intent, stable IDs"]:::core
+    end
+
+    subgraph Storage["Application-owned storage"]
+        sessions["PersistenceABC<br/>or LangGraph checkpointer"]:::provider
+    end
+
+    subgraph AGXAI["AGXAI provenance"]
+        store["ProvenanceStore<br/>execution, events, links"]:::provider
+        archive["SemanticArchiveABC<br/>evidence and decisions"]:::provider
+    end
+
+    task -- "execute(input)" --> discover
+    discover <-- "messages / JSON" --> model
+    discover --> policy
+    policy -- "blockers" --> clarify
+    clarify <-- "payload / answers" --> ask
+    clarify -- "reassess" --> discover
+    policy --> outbox
+    outbox --> store
+    outbox --> archive
+    Engine <-. "claimed, fenced state" .-> sessions
+    outbox -- "audited result" --> work

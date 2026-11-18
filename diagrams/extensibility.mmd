@@ -1,0 +1,36 @@
+flowchart LR
+    classDef core fill:#eef4ff,stroke:#3567c7,color:#0f2547
+    classDef abc fill:#fff7e8,stroke:#c98a12,color:#0f2547
+    classDef app fill:#ecf8f1,stroke:#2f8f5b,color:#0f2547
+
+    engine["SufficiencyEngine"]:::core
+
+    subgraph Callbacks["Callbacks, sync or async"]
+        model["model_call(messages)"]:::app
+        interrupt["interrupt_call(payload)"]:::app
+        command["command_call(result)"]:::app
+        telemetry["telemetry_call(event)"]:::app
+    end
+
+    subgraph ABCs["Extension ABCs"]
+        persistence["PersistenceABC<br/>default: InMemoryPersistence"]:::abc
+        archive["SemanticArchiveABC<br/>default: InMemorySemanticArchive"]:::abc
+        embedding["EmbeddingModelABC<br/>optional, candidates only"]:::abc
+        store["AGXAI ProvenanceStore<br/>default: in-memory"]:::abc
+    end
+
+    subgraph Extras["Optional extras"]
+        langgraph["langgraph<br/>build_assessment_graph"]:::core
+        otel["observability<br/>OpenTelemetryObserver"]:::core
+    end
+
+    engine --> model
+    engine --> interrupt
+    engine --> command
+    engine --> telemetry
+    engine --> persistence
+    engine --> embedding
+    engine -- "AGXAIAudit" --> store
+    engine -- "AGXAIAudit" --> archive
+    langgraph --> engine
+    otel -. "observe" .-> telemetry

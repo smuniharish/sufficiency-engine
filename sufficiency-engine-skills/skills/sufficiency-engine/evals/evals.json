@@ -1,0 +1,42 @@
+{
+  "skill_name": "sufficiency-engine",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Our deployment assistant in app.py plans and deploys straight away. Add Sufficiency Engine so it asks for an unknown mandatory platform through our ask_user callback and only deploys when the task is ready. We already own the model client and conversation store.",
+      "expected_output": "An explicit async task-entry integration using supplied callbacks and native response IDs, with mandatory AGXAI retained and no new provider or conversation infrastructure.",
+      "files": [
+        "files/deploy_assistant/app.py"
+      ],
+      "assertions": [
+        "Uses await engine.execute(input=task) at task entry",
+        "Preserves required blockers and does not fabricate answers",
+        "Explains sync callback execution and notification idempotency"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Our LangGraph supervisor in app.py runs research, develop, and test workers. Add task-readiness clarification that survives graph resume without reassessing every tool call.",
+      "expected_output": "A task-entry assessment graph using the host checkpointer and native Command resumes; subsequent worker and tool execution stays outside readiness.",
+      "files": [
+        "files/supervisor_graph/app.py"
+      ],
+      "assertions": [
+        "Uses build_assessment_graph with authoritative checkpointing",
+        "Keeps thread and session identity stable across resume",
+        "Does not add model/tool interception or a second session store"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "An answer Linux was accepted, but reassessment still reports the mandatory deployment region unresolved. AGXAI is intermittently failing. Make this safe without disabling audit.",
+      "expected_output": "Keeps readiness false, rejects description/contract drift under the old key, uses explicit superseding lineage where necessary, and repairs/resumes stable audit delivery.",
+      "files": [],
+      "assertions": [
+        "Does not reuse an old answer as proof for changed meaning",
+        "Does not bypass mandatory provenance or silently replace its sink",
+        "Explains that unresolved reassessment invalidates inferred availability"
+      ]
+    }
+  ]
+}

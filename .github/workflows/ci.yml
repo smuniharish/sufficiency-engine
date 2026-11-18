@@ -1,0 +1,105 @@
+name: Development quality
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Python ${{ matrix.python }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - run: uv sync --locked --extra langgraph --extra observability --group local-integration
+      - run: uv run --no-sync pytest --cov=sufficiency_engine.models --cov=sufficiency_engine.policy --cov-branch --cov-fail-under=100
+
+  quality:
+    name: Lint, types, docs, and package build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "26"
+      - run: uv sync --locked --extra langgraph --extra observability --group docs --group local-integration --group live
+      - run: uv lock --check
+      - run: uv run --no-sync ruff check .
+      - run: uv run --no-sync ruff format --check .
+      - run: uv run --no-sync pyrefly check
+      - run: uv run --no-sync zensical build --strict
+      - run: node scripts/render-diagrams.mjs --check
+      - run: uv run --no-sync python scripts/evaluate_deduplication.py
+      - run: uv run --no-sync python scripts/evaluate_readiness.py
+      - run: uv build
+      - run: uv run --no-sync python scripts/check_distribution.py
+
+  postgres:
+    name: Durable PostgreSQL process-restart recovery
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+        env:
+          POSTGRES_USER: sufficiency_test
+          POSTGRES_PASSWORD: isolated-ci-only
+          POSTGRES_DB: sufficiency_test
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U sufficiency_test -d sufficiency_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: smuniharish/agxai
+          ref: 1cf60e96c4c804a964a9a164128ca0830cfe236d
+          path: .ci/agxai
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      - run: uv sync --locked --extra langgraph --group local-integration
+      - run: uv run --no-sync pytest tests/test_postgres_recovery.py
+        env:
+          SUFFICIENCY_TEST_POSTGRES_DSN: postgresql://sufficiency_test:isolated-ci-only@127.0.0.1:${{ job.services.postgres.ports[5432] }}/sufficiency_test
+          AGXAI_POSTGRES_EXAMPLE: ${{ github.workspace }}/.ci/agxai/examples/postgres_store.py
+
+  live:
+    name: Live OpenAI-compatible model
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      SUFFICIENCY_TEST_LLM_API_KEY: ${{ secrets.SUFFICIENCY_TEST_LLM_API_KEY }}
+      SUFFICIENCY_TEST_LLM_BASE_URL: ${{ secrets.SUFFICIENCY_TEST_LLM_BASE_URL }}
+      SUFFICIENCY_TEST_LLM_MODEL: ${{ secrets.SUFFICIENCY_TEST_LLM_MODEL }}
+    steps:
+      - if: env.SUFFICIENCY_TEST_LLM_API_KEY == ''
+        run: echo "::notice::Live model secrets are not configured; skipping live checks."
+      - if: env.SUFFICIENCY_TEST_LLM_API_KEY != ''
+        uses: actions/checkout@v4
+      - if: env.SUFFICIENCY_TEST_LLM_API_KEY != ''
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      - if: env.SUFFICIENCY_TEST_LLM_API_KEY != ''
+        run: uv sync --locked --group live
+      - if: env.SUFFICIENCY_TEST_LLM_API_KEY != ''
+        run: uv run --no-sync pytest -m live
+      - if: env.SUFFICIENCY_TEST_LLM_API_KEY != ''
+        run: uv run --no-sync python scripts/run_live_evaluation.py --repeats 3

@@ -1,0 +1,144 @@
+[build-system]
+requires = ["uv_build>=0.12,<0.14"]
+build-backend = "uv_build"
+
+[project]
+name = "sufficiency-engine"
+version = "0.1.0"
+description = "Provider-independent task readiness assessment for Python applications."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [
+  { name = "S MUNI HARISH", email = "samamuniharish@gmail.com" },
+]
+keywords = [
+  "agents",
+  "llm",
+  "readiness",
+  "sufficiency",
+  "clarification",
+  "requirements",
+  "langgraph",
+  "human-in-the-loop",
+  "provenance",
+  "agxai",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Framework :: AsyncIO",
+  "Framework :: Pydantic :: 2",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Typing :: Typed",
+]
+dependencies = [
+  "agxai>=1.0.2,<2",
+  "pydantic>=2.14.3,<3",
+  "rapidfuzz>=3.14.6,<4",
+]
+
+[project.urls]
+Homepage = "https://github.com/smuniharish/sufficiency-engine"
+Documentation = "https://sufficiency-engine.readthedocs.io/"
+Changelog = "https://github.com/smuniharish/sufficiency-engine/blob/main/CHANGELOG.md"
+Issues = "https://github.com/smuniharish/sufficiency-engine/issues"
+Repository = "https://github.com/smuniharish/sufficiency-engine"
+
+[project.optional-dependencies]
+langgraph = ["langgraph>=1.2.20,<2"]
+observability = ["agxai[otel]>=1.0.2,<2", "opentelemetry-api>=1.45.2,<2"]
+
+[dependency-groups]
+bge = ["FlagEmbedding>=1.4.2,<2"]
+docs = [
+  "griffe-pydantic>=1.3.2,<2",
+  "mkdocstrings-python>=2.0.10,<3",
+  "zensical>=0.1.0,<0.2",
+]
+live = ["openai>=2,<3", "truststore>=0.10,<1"]
+local-integration = [
+  "langgraph-checkpoint-postgres>=3,<4",
+  "opentelemetry-exporter-otlp-proto-http>=1.45.2,<2",
+  "opentelemetry-exporter-prometheus>=0.66b2,<1",
+  "prometheus-client>=0.23",
+  "psycopg[binary,pool]>=3.3.8,<4",
+]
+dev = [
+  "hypothesis>=6.170.14",
+  "langchain-core>=1.7.6,<2",
+  "langgraph>=1.2.20,<2",
+  "opentelemetry-sdk>=1.45.2,<2",
+  "packaging>=25",
+  "pyrefly>=1.4.1",
+  "pytest>=9.2.0",
+  "pytest-asyncio>=1.5.0",
+  "pytest-cov>=7.1.0",
+  "ruff>=0.17.5",
+  "skills-ref>=0.1.1,<1",
+]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.uv.build-backend]
+source-include = [
+  "CHANGELOG.md",
+  "CONTRIBUTING.md",
+  "SECURITY.md",
+  "diagrams/*.json",
+  "diagrams/*.mmd",
+  "docs/**/*.css",
+  "docs/**/*.json",
+  "docs/**/*.md",
+  "docs/**/*.png",
+  "docs/**/*.svg",
+  "examples/*.py",
+  "examples/*.yml",
+  "scripts/*.mjs",
+  "scripts/*.py",
+  "skills.sh.json",
+  "sufficiency-engine-skills/**/*.md",
+  "sufficiency-engine-skills/**/*.py",
+  "sufficiency-engine-skills/**/*.json",
+  "tests/**/*.py",
+  "tests/fixtures/*.json",
+  "uv.lock",
+  "zensical.toml",
+]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-config --strict-markers"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+markers = [
+  "postgres: requires an isolated local PostgreSQL service and the AGXAI example store",
+  "live: calls a real OpenAI-compatible model; requires SUFFICIENCY_TEST_LLM_* variables",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "UP"]
+
+[tool.pyrefly]
+project-includes = ["src", "tests", "scripts", "sufficiency-engine-skills"]
+search-path = ["scripts", "examples"]
+
+# Eval starting projects use a host-style TypedDict graph state, which pyrefly does not
+# yet match against LangGraph's protocol bound; the package uses a Pydantic state.
+[[tool.pyrefly.sub-config]]
+matches = "sufficiency-engine-skills/**/evals/files/**"
+errors = { bad-specialization = false }
+

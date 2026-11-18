@@ -1,0 +1,105 @@
+{
+  "skill_name": "sufficiency-engine-extend",
+  "queries": [
+    {
+      "query": "implement PersistenceABC on our existing postgres database",
+      "should_trigger": true,
+      "split": "train"
+    },
+    {
+      "query": "write a SemanticArchiveABC that keeps agxai evidence across restarts",
+      "should_trigger": true,
+      "split": "train"
+    },
+    {
+      "query": "add an EmbeddingModelABC wrapper around our local sentence encoder",
+      "should_trigger": true,
+      "split": "train"
+    },
+    {
+      "query": "our custom session store accepts writes with stale fencing tokens, fix the adapter",
+      "should_trigger": true,
+      "split": "train"
+    },
+    {
+      "query": "check my custom sufficiency persistence adapter with check_extensions.py",
+      "should_trigger": true,
+      "split": "train"
+    },
+    {
+      "query": "make our sufficiency engine session store survive two workers racing on the same session",
+      "should_trigger": true,
+      "split": "train"
+    },
+    {
+      "query": "store agxai Evidence and Decision models durably for sufficiency-engine audits",
+      "should_trigger": true,
+      "split": "validation"
+    },
+    {
+      "query": "run bge-m3 embeddings off the event loop for sufficiency engine question deduplication",
+      "should_trigger": true,
+      "split": "validation"
+    },
+    {
+      "query": "review this PersistenceABC implementation for revision conflicts and tenant isolation",
+      "should_trigger": true,
+      "split": "validation"
+    },
+    {
+      "query": "start from the sqlite template to build a durable sufficiency engine store",
+      "should_trigger": true,
+      "split": "validation"
+    },
+    {
+      "query": "add sufficiency-engine to my deployment assistant so it asks for missing details before running",
+      "should_trigger": false,
+      "split": "train"
+    },
+    {
+      "query": "put a readiness check in front of our langgraph supervisor so workers only start when the task is clear",
+      "should_trigger": false,
+      "split": "train"
+    },
+    {
+      "query": "how do i resume a sufficiency engine assessment after the user answers the clarification question",
+      "should_trigger": false,
+      "split": "train"
+    },
+    {
+      "query": "my SufficiencyEngine result stays insufficient even after we submitted the answer, why",
+      "should_trigger": false,
+      "split": "train"
+    },
+    {
+      "query": "build an agent task scheduler with its own conversation database",
+      "should_trigger": false,
+      "split": "train"
+    },
+    {
+      "query": "implement the agxai ProvenanceStore interface for our event store",
+      "should_trigger": false,
+      "split": "train"
+    },
+    {
+      "query": "use vector similarity to decide whether a task is ready",
+      "should_trigger": false,
+      "split": "validation"
+    },
+    {
+      "query": "add a new llm provider sdk to sufficiency-engine core",
+      "should_trigger": false,
+      "split": "validation"
+    },
+    {
+      "query": "configure allow_assumptions and max_iterations for sufficiency-engine in production",
+      "should_trigger": false,
+      "split": "validation"
+    },
+    {
+      "query": "export sufficiency engine traces and metrics through opentelemetry",
+      "should_trigger": false,
+      "split": "validation"
+    }
+  ]
+}

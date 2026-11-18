@@ -1,0 +1,16 @@
+[
+  {"id":"exact","split":"calibration","left":"Which platform?","right":"Which platform?","equivalent":true,"expected_retained":1},
+  {"id":"normalization","split":"validation","left":"Which platform?","right":"  WHICH   platform  ","equivalent":true,"expected_retained":1},
+  {"id":"polite","split":"calibration","left":"Which platform should be used?","right":"Which platform should be used now?","equivalent":true,"expected_retained":2},
+  {"id":"paraphrase","split":"validation","left":"Which deployment platform?","right":"Which platform for deployment?","equivalent":true,"expected_retained":2},
+  {"id":"near-negation","split":"calibration","left":"Which platform should be used?","right":"Which platform should not be used?","equivalent":false,"expected_retained":2},
+  {"id":"near-number","split":"validation","left":"Should port 8080 be used?","right":"Should port 8081 be used?","equivalent":false,"expected_retained":2},
+  {"id":"followup","split":"calibration","left":"Which region?","right":"Which region?","follow_up":true,"equivalent":false,"expected_retained":2},
+  {"id":"other-requirement","split":"validation","left":"Which region?","right":"Which region?","same_requirement":false,"equivalent":false,"expected_retained":2},
+  {"id":"other-slot","split":"calibration","left":"Which target?","right":"Which target?","right_slot":"backup","equivalent":false,"expected_retained":2},
+  {"id":"other-type","split":"validation","left":"Which version?","right":"Which version?","right_type":"integer","equivalent":false,"expected_retained":2},
+  {"id":"other-constraints","split":"calibration","left":"Which region?","right":"Which region?","right_constraints":{"choices":["Europe"]},"equivalent":false,"expected_retained":2},
+  {"id":"different-question","split":"validation","left":"Which platform?","right":"How many replicas?","equivalent":false,"expected_retained":2},
+  {"id":"reordered","split":"calibration","left":"What is the target environment?","right":"Which environment is the target?","equivalent":true,"expected_retained":2},
+  {"id":"punctuation","split":"validation","left":"Which platform?","right":"Which platform!","equivalent":true,"expected_retained":2}
+]

@@ -1,0 +1,188 @@
+# Documentation site, built with Zensical: `uv run zensical build --strict`.
+# Preview locally with `uv run zensical serve`.
+
+[project]
+site_name = "Sufficiency Engine"
+site_description = "Decide whether a task has enough information to proceed, with clarification and AGXAI provenance. Provider-independent and framework-agnostic."
+site_author = "S MUNI HARISH"
+repo_name = "smuniharish/sufficiency-engine"
+repo_url = "https://github.com/smuniharish/sufficiency-engine"
+edit_uri = "edit/main/docs/"
+copyright = "Copyright &copy; Sufficiency Engine contributors. Released under the Apache License 2.0."
+extra_css = ["stylesheets/extra.css"]
+
+nav = [
+  { "Home" = "index.md" },
+  { "Getting started" = [
+    "getting-started/index.md",
+    { "Installation" = "getting-started/installation.md" },
+    { "Quickstart" = "getting-started/quickstart.md" },
+    { "Configuration" = "getting-started/configuration.md" },
+  ] },
+  { "User guide" = [
+    "guide/index.md",
+    { "Concepts" = [
+      "guide/concepts/index.md",
+      { "Requirements and evidence" = "guide/concepts/requirements.md" },
+      { "Readiness policy" = "guide/concepts/readiness-policy.md" },
+      { "Clarification" = "guide/concepts/clarification.md" },
+      { "Persistence and recovery" = "guide/concepts/persistence.md" },
+      { "Provenance" = "guide/concepts/provenance.md" },
+    ] },
+    { "How-to guides" = [
+      "guide/how-to/index.md",
+      { "Use durable storage" = "guide/how-to/durable-storage.md" },
+      { "Recover an interrupted assessment" = "guide/how-to/recover-interrupted.md" },
+      { "Detect semantic duplicates" = "guide/how-to/semantic-duplicates.md" },
+      { "Evaluate a discovery model" = "guide/how-to/evaluate-discovery.md" },
+      { "Validate a deployment" = "guide/how-to/validate-deployment.md" },
+    ] },
+    { "Troubleshooting" = "guide/troubleshooting.md" },
+  ] },
+  { "Integrations" = [
+    "integrations/index.md",
+    { "LangGraph" = "integrations/langgraph.md" },
+    { "OpenTelemetry" = "integrations/opentelemetry.md" },
+    { "Custom frameworks" = "integrations/custom-frameworks.md" },
+  ] },
+  { "Examples" = [
+    "examples/index.md",
+    { "Quickstart" = "examples/quickstart.md" },
+    { "Standalone" = "examples/standalone.md" },
+    { "Supervisor and workers" = "examples/supervisor-worker.md" },
+    { "Observability" = "examples/observability.md" },
+    { "BGE-M3 duplicates" = "examples/bge-m3.md" },
+    { "PostgreSQL recovery" = "examples/postgres-recovery.md" },
+    { "OpenAI-compatible models" = "examples/openai-compatible.md" },
+  ] },
+  { "Architecture" = [
+    "architecture/index.md",
+    { "Assessment lifecycle" = "architecture/assessment-lifecycle.md" },
+    { "Requirements and evidence" = "architecture/requirements-and-evidence.md" },
+    { "Persistence" = "architecture/persistence.md" },
+    { "Provenance" = "architecture/provenance.md" },
+    { "Extensibility" = "architecture/extensibility.md" },
+  ] },
+  { "Agent Skills" = [
+    "agent-skills/index.md",
+    { "sufficiency-engine" = "agent-skills/sufficiency-engine.md" },
+    { "sufficiency-engine-extend" = "agent-skills/sufficiency-engine-extend.md" },
+    { "Install in your agent" = "agent-skills/install.md" },
+    { "Evaluation" = "agent-skills/evaluation.md" },
+  ] },
+  { "Security" = "security.md" },
+  { "Benchmarks" = "benchmarks.md" },
+  { "API reference" = [
+    "api/index.md",
+    { "Engine" = "api/engine.md" },
+    { "Models" = "api/models.md" },
+    { "Storage" = "api/storage.md" },
+    { "Provenance and embeddings" = "api/provenance.md" },
+    { "Integrations" = "api/integrations.md" },
+    { "Errors" = "api/errors.md" },
+  ] },
+  { "Project" = [
+    { "Changelog" = "project/changelog.md" },
+    { "Contributing" = "project/contributing.md" },
+    { "Testing" = "project/testing.md" },
+    { "Compatibility" = "project/compatibility.md" },
+    { "Releasing" = "project/releasing.md" },
+  ] },
+]
+
+# `zensical build --strict` fails on any of these.
+[project.validation]
+invalid_links = true
+invalid_link_anchors = true
+unresolved_references = true
+unresolved_footnotes = true
+unused_definitions = true
+unused_footnotes = true
+shadowed_definitions = true
+shadowed_footnotes = true
+
+[project.theme]
+font = false
+logo = "assets/logo.svg"
+favicon = "assets/logo.svg"
+icon.repo = "fontawesome/brands/github"
+features = [
+  "content.action.edit",
+  "content.code.annotate",
+  "content.code.copy",
+  "content.tabs.link",
+  "navigation.footer",
+  "navigation.indexes",
+  "navigation.instant",
+  "navigation.sections",
+  "navigation.tabs",
+  "navigation.top",
+  "navigation.tracking",
+  "search.highlight",
+  "search.share",
+  "search.suggest",
+  "toc.follow",
+]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "indigo"
+accent = "indigo"
+toggle.icon = "material/weather-night"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "indigo"
+accent = "indigo"
+toggle.icon = "material/weather-sunny"
+toggle.name = "Switch to light mode"
+
+[[project.extra.social]]
+icon = "fontawesome/brands/github"
+link = "https://github.com/smuniharish/sufficiency-engine"
+name = "Sufficiency Engine on GitHub"
+
+# Click a diagram to open it full size, with zoom.
+[project.plugins.glightbox]
+
+[project.plugins.mkdocstrings.handlers.python]
+paths = ["src"]
+
+[project.plugins.mkdocstrings.handlers.python.options]
+docstring_style = "google"
+extensions = [{ griffe_pydantic = { schema = false } }]
+show_source = false
+show_root_heading = true
+show_root_full_path = false
+show_symbol_type_heading = true
+merge_init_into_class = true
+separate_signature = true
+show_signature_annotations = true
+signature_crossrefs = true
+members_order = "source"
+heading_level = 3
+
+[project.markdown_extensions]
+abbr = {}
+admonition = {}
+attr_list = {}
+def_list = {}
+footnotes = {}
+md_in_html = {}
+tables = {}
+toc.permalink = true
+pymdownx.betterem = {}
+pymdownx.details = {}
+pymdownx.emoji.emoji_index = "zensical.extensions.emoji.twemoji"
+pymdownx.emoji.emoji_generator = "zensical.extensions.emoji.to_svg"
+pymdownx.highlight.anchor_linenums = true
+pymdownx.inlinehilite = {}
+pymdownx.keys = {}
+pymdownx.snippets.base_path = ["."]
+pymdownx.snippets.check_paths = true
+pymdownx.superfences = {}
+pymdownx.tabbed.alternate_style = true
+pymdownx.tasklist.custom_checkbox = true

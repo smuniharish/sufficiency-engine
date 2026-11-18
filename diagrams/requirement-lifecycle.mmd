@@ -1,0 +1,26 @@
+flowchart LR
+    classDef status fill:#eef4ff,stroke:#3567c7,color:#0f2547
+    classDef ok fill:#ecf8f1,stroke:#2f8f5b,color:#0f2547
+    classDef stop fill:#fff7e8,stroke:#c98a12,color:#0f2547
+
+    proposed["Model proposes<br/>key, classification,<br/>status, evidence quote"]:::status
+    check{"Quote found in<br/>task text or this<br/>requirement's answers?"}:::status
+    available["available<br/>cites stable evidence ID"]:::ok
+    unresolved["unresolved / missing<br/>blocks if required"]:::stop
+    assumed["assumed<br/>approved, low-risk,<br/>reversible only"]:::ok
+    declined["declined<br/>not asked again"]:::stop
+    answer["Valid answer<br/>bound to requirement ID"]:::status
+    reassess{"Reassessment<br/>confirms with quote?"}:::status
+    lineage["Changed meaning<br/>needs a new key and<br/>explicit lineage"]:::stop
+    superseded["superseded / retired<br/>never resurrected"]:::stop
+
+    proposed --> check
+    check -- "yes" --> available
+    check -- "no quote" --> unresolved
+    check -- "unsupplied quote" --> failed["Model response rejected"]:::stop
+    unresolved -- "clarification" --> answer --> reassess
+    unresolved -- "host approves" --> assumed
+    unresolved -- "user declines" --> declined
+    reassess -- "yes" --> available
+    reassess -- "no" --> unresolved
+    available -- "split, merge, supersede" --> lineage --> superseded

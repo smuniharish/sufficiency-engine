@@ -1,0 +1,42 @@
+{
+  "skill_name": "sufficiency-engine-extend",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Implement a durable PersistenceABC adapter on our application database in database.py. Two workers can race and a crashed writer must not overwrite a newer owner's snapshot.",
+      "expected_output": "Uses scoped keys, transactional lease/fence and revision validation, copy-isolated JSON snapshots, explicit conflicts, and isolated conformance and process-restart tests.",
+      "files": [
+        "files/app_database/database.py"
+      ],
+      "assertions": [
+        "Implements the actual ABC signatures",
+        "Rejects expired and superseded fencing tokens atomically with writes",
+        "Does not substitute an in-process lock for backend atomicity"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Our durable AGXAI ProvenanceStore saves events but semantic Evidence and Decision disappear on restart. Add the missing Sufficiency Engine archive.",
+      "expected_output": "Implements SemanticArchiveABC with real AGXAI models, scoped idempotent upserts/reads/deletion, and tests replay and restart without replacing the existing provenance store.",
+      "files": [],
+      "assertions": [
+        "Uses actual AGXAI artifacts rather than custom evidence models",
+        "Retains both the provenance store and semantic archive",
+        "Checks isolation, replay, and deletion using test-only scopes"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Implement EmbeddingModelABC around the blocking LocalEncoder in encoder.py for clarification deduplication. Some of its vectors are empty or nonfinite.",
+      "expected_output": "Runs inference off the event loop, returns validated aligned numeric vectors, surfaces failures for conservative fallback, and preserves distinct answer slots and follow-ups.",
+      "files": [
+        "files/local_encoder/encoder.py"
+      ],
+      "assertions": [
+        "Does not download weights implicitly or add a core provider dependency",
+        "Does not replace failed embeddings with fabricated vectors",
+        "Does not use vector similarity to drop distinct questions or decide readiness"
+      ]
+    }
+  ]
+}
