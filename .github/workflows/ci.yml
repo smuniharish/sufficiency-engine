@@ -1,4 +1,4 @@
-name: Development quality
+name: CI
 
 on:
   push:
