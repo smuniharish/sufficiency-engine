@@ -15,6 +15,8 @@ semantic versioning from this release.
 - Keep task-level source references without asserting per-requirement support.
 - Add repository-distributed usage/extension Agent Skills, labeled evaluation
   tools, lifecycle properties, storage conformance checks, and PostgreSQL CI.
+- Evaluate both Agent Skills on all six tasks and blind trigger routing; add
+  OpenTelemetry guidance to the usage skill.
 - Document API/state compatibility and deployment acceptance boundaries.
 - Add Mermaid diagram sources under `diagrams/` with rendered images, a
   renderer, and a CI staleness check.

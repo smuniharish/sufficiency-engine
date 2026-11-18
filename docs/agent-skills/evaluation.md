@@ -55,7 +55,7 @@ Each skill has an `evals/` folder in the format described in
 
 ## Results
 
-Run with sufficiency-engine 0.1.0, a general-purpose coding agent, one run per variant, in fresh workspaces. The agent without the skill could read the installed package but not the skill, the docs, or this repository's source. Time and tool calls are as the agent reported them.
+Run with a general-purpose coding agent, one run per variant, in fresh workspaces. The first round used sufficiency-engine 0.1.0; tasks `sufficiency-engine` #3, `sufficiency-engine-extend` #2, and the revised extension run used 1.0.0, which has the same API. The agent without the skill could read the installed package but not the skill, the docs, or this repository's source. Time and tool calls are as the agent reported them.
 
 | Task | Variant | Assertions | Tool calls | Time |
 | --- | --- | --- | --- | --- |
@@ -64,10 +64,24 @@ Run with sufficiency-engine 0.1.0, a general-purpose coding agent, one run per v
 | | With revised skill | 3/3 | 18 | 87 s |
 | `sufficiency-engine` #2: readiness before a LangGraph supervisor | With skill | 3/3 | 14 | 151 s |
 | | Without skill | 3/3 | 13 | 119 s |
+| `sufficiency-engine` #3: unresolved region and failing AGXAI writes | With skill | 3/3 | 15 | 121 s |
+| | Without skill | 3/3 | 15 | 141 s |
 | `sufficiency-engine-extend` #1: SQLite `PersistenceABC` | With skill | 3/3 | 10 | 151 s |
 | | Without skill | 3/3 | 9 | 137 s |
+| `sufficiency-engine-extend` #2: durable AGXAI semantic archive | With skill | 3/3 | 12 | 162 s |
+| | Without skill | 3/3 | 13 | 153 s |
 | `sufficiency-engine-extend` #3: blocking local encoder | With skill | 3/3 | 13 | 86 s |
 | | Without skill | 3/3 | 11 | 78 s |
+| | With revised skill | 3/3 | 17 | 109 s |
+
+Trigger routing was measured blind: an agent saw only the two skill names and descriptions and the 40 trigger queries, shuffled and unlabeled, and chose which skills to load for each.
+
+| Skill | Train | Validation |
+| --- | --- | --- |
+| `sufficiency-engine` | 12/12 | 7/8 |
+| `sufficiency-engine-extend` | 12/12 | 8/8 |
+
+The one miss, "export sufficiency engine traces and metrics through opentelemetry", loaded neither skill. The `sufficiency-engine` description now names OpenTelemetry export, and `references/callbacks.md` covers `OpenTelemetryObserver`. A blind rerun on the train split scored 24/24. The validation split was not rerun after the change, so it was not used for tuning.
 
 Findings:
 
@@ -76,16 +90,23 @@ Findings:
   change correctness on these tasks.
 - With the skill, the agent ran `verify_setup.py` or `check_extensions.py`
   before and after its change, and ran the extension checker against its own
-  SQLite factory. It made one to six more tool calls and took 8 to 41 seconds
-  longer, mostly reading the skill and running those checks.
+  SQLite factory. It usually made a few more tool calls, mostly reading the
+  skill and running those checks.
 - Neither first run of task #1 told the user that synchronous callbacks run
   in threads that a timeout cannot stop, or that `command_call` is dispatched
   at most once. Step 7 of the `sufficiency-engine` workflow now requires this.
-  The revised skill passed all three assertions on a fresh run.
-- With the extension skill, task #3 ran `check_extensions.py`, which does not
-  cover embeddings, and its tests imported a private module. The workflow now
-  says what the checker covers and to test embeddings through the public
-  `SufficiencyEngine(embedding_model=...)`. This change has not been
-  re-evaluated.
-- Tasks `sufficiency-engine` #3 and `sufficiency-engine-extend` #2 were not
-  run. Trigger queries were not run either, so routing accuracy is unmeasured.
+  The revised skill passed all three assertions on a fresh run, and the task #3
+  run with the skill reported the same callback semantics.
+- With the extension skill, the first task #3 run ran `check_extensions.py`,
+  which does not cover embeddings, and its tests imported a private module.
+  The workflow now says what the checker covers and to test embeddings through
+  the public `SufficiencyEngine(embedding_model=...)`. The revised run did
+  exactly that and imported no private module.
+- In task #3 of `sufficiency-engine`, both variants kept the unresolved region
+  blocking, kept `AGXAIAudit` mandatory, and resumed the same session to replay
+  the pending audit. In task #2 of the extension skill, both variants stored
+  AGXAI's own `Evidence` and `Decision` in a durable `SemanticArchiveABC` next
+  to the provenance store, and tested restart, idempotent replay, scope
+  isolation, and deletion.
+- One run per variant is a small sample. Treat these results as a smoke test of
+  the skills, not as a measured effect size.

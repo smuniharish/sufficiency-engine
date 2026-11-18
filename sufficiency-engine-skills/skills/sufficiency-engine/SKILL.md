@@ -5,7 +5,8 @@ description: >-
   determine whether a task has enough information, collect necessary
   clarification, validate supplied answers, approve safe assumptions, recover
   assessments, or place readiness before a LangGraph supervisor. Also use it
-  to troubleshoot unexpected readiness or failed mandatory AGXAI recording.
+  to troubleshoot unexpected readiness or failed mandatory AGXAI recording,
+  or to export its traces and metrics through OpenTelemetry.
   Do not use it to execute tasks, manage conversations, instrument every
   model/tool call, or implement a storage/embedding extension; use
   sufficiency-engine-extend for extension contracts.
@@ -54,7 +55,7 @@ discovery is complete or that execution is authorized.
 
 | Concern | Reference |
 | --- | --- |
-| Callbacks, evidence, assumptions, and failure recovery | [callbacks.md](references/callbacks.md) |
+| Callbacks, evidence, assumptions, failure recovery, and telemetry | [callbacks.md](references/callbacks.md) |
 | Checkpoint-safe interrupt/resume and task boundaries | [langgraph.md](references/langgraph.md) |
 
 ## Safety rules

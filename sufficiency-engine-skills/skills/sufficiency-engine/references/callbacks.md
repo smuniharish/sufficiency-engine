@@ -39,3 +39,13 @@ intent. Never create a new successful assessment merely to conceal the failure.
 Durable recovery requires both durable session state and durable AGXAI
 provenance and semantic storage. Task-level `source_references` are opaque
 assessment references, not verified per-requirement source attribution.
+
+## Telemetry
+
+Install the `observability` extra. Construct
+`OpenTelemetryObserver(tracer_provider=..., meter_provider=...)` from
+`sufficiency_engine.integrations.opentelemetry` with the application's own
+providers, and pass its `observe` method as `telemetry_call`. It does not
+configure global providers or exporters, and records no task or answer text.
+Configure AGXAI's own observability on `AGXAIAudit` separately. Telemetry is
+not a provenance record and never replaces the durable AGXAI store.
