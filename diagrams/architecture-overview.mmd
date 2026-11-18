@@ -11,10 +11,10 @@ flowchart LR
     end
 
     subgraph Engine["Sufficiency Engine"]
-        discover["Requirement discovery<br/>schema and evidence validation"]:::core
+        discover["Requirement discovery"]:::core
         policy["Deterministic policy<br/>blocking, dependencies, assumptions"]:::core
-        clarify["Clarification<br/>questions, dedup, answer validation"]:::core
-        outbox["Audit outbox<br/>prepared intent, stable IDs"]:::core
+        clarify["Clarification<br/>questions and answers"]:::core
+        audit["AGXAI audit"]:::core
     end
 
     subgraph Storage["Application-owned storage"]
@@ -32,8 +32,8 @@ flowchart LR
     policy -- "blockers" --> clarify
     clarify <-- "payload / answers" --> ask
     clarify -- "reassess" --> discover
-    policy --> outbox
-    outbox --> store
-    outbox --> archive
-    Engine <-. "claimed, fenced state" .-> sessions
-    outbox -- "audited result" --> work
+    policy --> audit
+    audit --> store
+    audit --> archive
+    Engine <-. "resumable assessment" .-> sessions
+    audit -- "audited result" --> work

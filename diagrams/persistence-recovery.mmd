@@ -1,22 +1,16 @@
-sequenceDiagram
-    autonumber
-    participant A as Worker A
-    participant Store as PersistenceABC
-    participant B as Worker B
+flowchart LR
+    classDef app fill:#ecf8f1,stroke:#2f8f5b,color:#0f2547
+    classDef core fill:#eef4ff,stroke:#3567c7,color:#0f2547
+    classDef provider fill:#fff7e8,stroke:#c98a12,color:#0f2547
 
-    A->>Store: acquire(scope, owner, lease)
-    Store-->>A: claim (fencing token 7)
-    B->>Store: acquire(scope, owner, lease)
-    Store-->>B: SessionConflictError
-    A->>Store: save(state, expected_revision=3, claim)
-    Store-->>A: revision 4
-    Note over A: Process stops before release
-    Note over Store: Lease expires
-    B->>Store: acquire(scope, owner, lease)
-    Store-->>B: claim (fencing token 8)
-    A->>Store: save(state, expected_revision=4, stale claim)
-    Store-->>A: SessionConflictError (claim superseded)
-    B->>Store: load(scope)
-    Store-->>B: revision 4 with pending audit or interaction marker
-    Note over B: Retry pending audit with the same IDs.<br/>A dispatched interaction is never replayed.<br/>Resume with an explicit response.
-    B->>Store: release(scope, claim)
+    first["Application worker"]:::app
+    store["PersistenceABC store<br/>exclusive ownership and safe updates"]:::provider
+    interrupted["Process or request stops"]:::app
+    resumed["A later worker resumes<br/>the stored assessment"]:::core
+    audit["Pending audit may be retried<br/>with the same record identities"]:::core
+    interaction["A dispatched user interaction<br/>is not sent again automatically"]:::core
+
+    first --> store
+    store --> interrupted --> resumed
+    resumed --> audit
+    resumed --> interaction

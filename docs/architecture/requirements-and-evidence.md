@@ -34,11 +34,9 @@ and constraints cannot change. A changed meaning needs a new key and explicit
 lineage (`split`, `merge`, `supersede`, or `retire`), which the engine
 validates and returns in `result.lineage`.
 
-**Stable IDs.** Each assessment and AGXAI run gets a random ID once, which is
-saved with the session. Requirement, question, assumption, decision, evidence,
-and link IDs are UUIDv5 values derived from those IDs and from the key, round,
-or content they describe. Resumes and replays produce the same IDs, which
-makes audit delivery idempotent.
+**Stable audit references.** Assessment and audit records retain stable
+identifiers across a resume so applications can correlate them. Their internal
+generation strategy is not part of the public API.
 
 ## Reassessment
 
@@ -46,15 +44,6 @@ After each clarification round, the model sees every prior requirement with
 its frozen contract, status, lifecycle, and the answers accepted for it. It
 must confirm availability with a new quote. An answered requirement whose
 answer the model does not quote stays unresolved and keeps blocking.
-
-## Alternatives considered
-
-| Alternative | Why not |
-| --- | --- |
-| Trust the model's `available` status | A single hallucination becomes a false ready result |
-| Semantic matching of quotes | Similar text is not the same fact; negations and numbers defeat it |
-| Let keys evolve freely | Answers and audit records would refer to a requirement whose meaning changed |
-| Per-source attribution of each requirement | A quote cannot show which source document supports it; recording it would be invented provenance |
 
 ## Failure scenarios
 

@@ -8,9 +8,9 @@ from 1.0.0. This page states what may change between releases and how stored ses
 | Component | Supported |
 | --- | --- |
 | Python | 3.12, 3.13, 3.14, and 3.15, tested on Linux and Windows |
-| AGXAI | `>=1.0.2,<2` |
+| AGXAI | `>=1.0.3,<2` |
 | Pydantic | `>=2.14.3,<3` |
-| LangGraph (optional) | `>=1.2.20,<2` |
+| LangGraph (optional) | `>=1.2.22,<2` |
 | OpenTelemetry API (optional) | `>=1.45.2,<2` |
 
 ## Public API

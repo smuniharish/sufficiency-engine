@@ -33,14 +33,12 @@ which delivers them to the registered `SemanticArchiveABC` plugin.
 - **Replayable.** IDs are stable, so the outbox can deliver an intent again
   after a crash or outage.
 
-## What is deliberately not done
+## Boundaries
 
-- No separate provenance or lineage store. Requirement lineage is part of the
-  assessment result; AGXAI owns provenance relationships.
-- No per-requirement source attribution. Source references are linked to the
-  assessment decision, because a model quote cannot show which source supports
-  a requirement.
-- No exactly-once delivery across systems. The outbox gives at-least-once
-  delivery; idempotent stores make it effectively once.
-- No use of telemetry as audit. An optional AGXAI observer emits events for
-  correlation, and its failures produce only a `telemetry_error` warning.
+- AGXAI is the provenance and lineage system of record. Telemetry supports
+  operational correlation; it does not replace the audit.
+- Source references are attached to the assessment decision. The engine does
+  not claim that a reference supports an individual requirement unless that
+  relationship is established by the application.
+- Delivery may be retried after an ambiguous failure. Use idempotent AGXAI
+  stores; there is no cross-system exactly-once transaction.

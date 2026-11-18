@@ -86,6 +86,7 @@ nav = [
     { "Contributing" = "project/contributing.md" },
     { "Testing" = "project/testing.md" },
     { "Compatibility" = "project/compatibility.md" },
+    { "Dependency audit" = "project/dependencies.md" },
     { "Releasing" = "project/releasing.md" },
   ] },
 ]

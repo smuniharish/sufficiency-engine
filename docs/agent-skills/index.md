@@ -115,6 +115,24 @@ Both skills teach the agent the rules that keep an integration correct:
 - keep AGXAI provenance mandatory instead of replacing it with a no-op;
 - never weaken a storage contract to make a test pass.
 
+## Related skills from dependency maintainers
+
+These are optional Agent Skills maintained outside this repository. They do
+not install with the Python package or replace the Sufficiency Engine skills.
+Install them only when their task-specific guidance is useful.
+
+| Project | Relevant skill | Scope |
+| --- | --- | --- |
+| [AGXAI](https://agxai.readthedocs.io/en/latest/agent-skills/) | `agxai`, `agxai-extend` | Integrate AGXAI provenance or implement its extension points |
+| [LangChain skills](https://github.com/langchain-ai/langchain-skills) | `langchain-build-agent` | Build with LangGraph, LangChain, or Deep Agents; maintained separately from the `langgraph` package and described upstream as early development |
+| [Pydantic](https://github.com/pydantic/pydantic/tree/main/.agents/skills/pydantic) | `pydantic` | Pydantic model validation and serialization; this is Pydantic core guidance, not Pydantic AI |
+
+The [installation guide](install.md#upstream-skills) lists verified upstream
+installation commands. This page lists only upstream skills whose location
+and installation path were confirmed for this audit; check upstream project
+documentation for changes. Third-party skills are not presented as
+package-maintainer guidance.
+
 ## Next steps
 
 <div class="grid cards" markdown>

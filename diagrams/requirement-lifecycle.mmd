@@ -3,24 +3,21 @@ flowchart LR
     classDef ok fill:#ecf8f1,stroke:#2f8f5b,color:#0f2547
     classDef stop fill:#fff7e8,stroke:#c98a12,color:#0f2547
 
-    proposed["Model proposes<br/>key, classification,<br/>status, evidence quote"]:::status
-    check{"Quote found in<br/>task text or this<br/>requirement's answers?"}:::status
-    available["available<br/>cites stable evidence ID"]:::ok
-    unresolved["unresolved / missing<br/>blocks if required"]:::stop
-    assumed["assumed<br/>approved, low-risk,<br/>reversible only"]:::ok
-    declined["declined<br/>not asked again"]:::stop
-    answer["Valid answer<br/>bound to requirement ID"]:::status
-    reassess{"Reassessment<br/>confirms with quote?"}:::status
-    lineage["Changed meaning<br/>needs a new key and<br/>explicit lineage"]:::stop
-    superseded["superseded / retired<br/>never resurrected"]:::stop
+    proposed["Requirement proposal"]:::status
+    check{"Supported by task<br/>or its accepted answer?"}:::status
+    available["Available"]:::ok
+    unresolved["Unresolved<br/>may block the task"]:::stop
+    assumed["Approved assumption"]:::ok
+    declined["Declined"]:::stop
+    answer["Answer for the<br/>identified requirement"]:::status
+    reassess["Reassess readiness"]:::status
+    lineage["Changed meaning<br/>uses explicit lineage"]:::stop
 
     proposed --> check
-    check -- "yes" --> available
-    check -- "no quote" --> unresolved
-    check -- "unsupplied quote" --> failed["Model response rejected"]:::stop
+    check -- "supported" --> available
+    check -- "not supported" --> unresolved
     unresolved -- "clarification" --> answer --> reassess
     unresolved -- "host approves" --> assumed
     unresolved -- "user declines" --> declined
-    reassess -- "yes" --> available
-    reassess -- "no" --> unresolved
-    available -- "split, merge, supersede" --> lineage --> superseded
+    reassess --> check
+    available -- "meaning changes" --> lineage --> proposed

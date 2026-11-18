@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.1
+
+Backward-compatible maintenance release. No public API or stored-session
+format changes.
+
+- Update compatible build, audit, documentation, and development dependencies.
+- Clarify public architecture contracts and simplify internal flow diagrams.
+- Document verified upstream Agent Skills and dependency version research.
+
 ## 1.0.0
 
 First stable release. The public API and the stored-session format follow

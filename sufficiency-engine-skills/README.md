@@ -42,6 +42,16 @@ Every Agent Skills host reads the same directories, so there is no separate copy
 for Claude Code, Codex, Cursor, or GitHub Copilot. The skills ship in the source
 archive, not in the Python wheel.
 
+AGXAI, the required provenance dependency, publishes complementary `agxai` and
+`agxai-extend` skills in its own repository. They are installed separately:
+
+```bash
+npx skills add smuniharish/agxai
+```
+
+See the [AGXAI skill installation guide](https://agxai.readthedocs.io/en/latest/agent-skills/install/)
+and the [upstream skill directory](https://github.com/smuniharish/agxai/tree/master/agxai-skills/skills).
+
 ## Format
 
 - `name` matches the directory. The `description` starts with "Use this skill

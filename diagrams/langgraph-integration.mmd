@@ -5,22 +5,14 @@ flowchart LR
 
     entry["New task<br/>thread_id"]:::app
 
-    subgraph Readiness["build_assessment_graph"]
-        prepare["prepare<br/>discover, reconcile,<br/>policy, audit intent"]:::core
-        audit["audit<br/>commit to AGXAI"]:::core
-        route{"route"}:::core
-        pause["interrupt<br/>ClarificationPayload"]:::core
-        apply["apply_response<br/>validate answers"]:::core
-    end
-
-    host["Host collects answers<br/>Command(resume=...)"]:::app
+    readiness["Readiness assessment<br/>build_assessment_graph"]:::core
+    interrupt["Clarification interrupt"]:::core
+    host["Host collects answers<br/>and resumes the same thread"]:::app
     checkpointer["Checkpointer<br/>authoritative graph state"]:::provider
     supervisor["Supervisor"]:::app
     workers["Researcher, developer,<br/>tester, tools"]:::app
 
-    entry --> prepare --> audit --> route
-    route -- "needs answers" --> pause
-    pause -. "same thread" .-> host -.-> apply
-    apply --> prepare
-    route -- "done: readiness" --> supervisor --> workers --> supervisor
-    Readiness <-.-> checkpointer
+    entry --> readiness
+    readiness -- "needs clarification" --> interrupt --> host --> readiness
+    readiness -- "readiness result" --> supervisor --> workers --> supervisor
+    readiness <-. "saved graph state" .-> checkpointer

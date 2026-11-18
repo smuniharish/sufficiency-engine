@@ -9,17 +9,16 @@ tools, workflows, and storage.
 
 ## Components
 
-| Component | Responsibility | Module |
-| --- | --- | --- |
-| `SufficiencyEngine` | Runs the assessment lifecycle, sessions, and callbacks | `engine` |
-| Discovery | Builds the model prompt and validates the model's JSON proposal | `_discovery` |
-| Readiness policy | Decides deterministically which requirements block the task | `policy` |
-| Clarification | Combines, deduplicates, and validates questions and answers | `_clarification` |
-| Session state | The versioned, JSON-serializable state of one assessment | `_state` |
-| Persistence | Claimed, fenced, revision-checked session storage | `persistence` |
-| Audit | Prepares and delivers AGXAI provenance records | `provenance` |
-| Models | Public Pydantic models and enums | `models` |
-| Integrations | Optional LangGraph and OpenTelemetry adapters | `integrations` |
+| Component | Responsibility |
+| --- | --- |
+| `SufficiencyEngine` | Runs an assessment through the application's callbacks |
+| Discovery | Collects proposed requirements from the configured model |
+| Readiness policy | Determines which requirements block the task |
+| Clarification | Plans questions and validates the application's answers |
+| Persistence | Saves standalone sessions for recovery |
+| Audit | Records readiness decisions through AGXAI |
+| Public models | Pydantic models and enums used by the API |
+| Integrations | Optional LangGraph and OpenTelemetry adapters |
 
 ## Lifecycle
 
@@ -30,8 +29,7 @@ tools, workflows, and storage.
    the supplied text.
 3. The policy computes which required requirements are still unavailable, and
    plans one decision for each: ask, assume, or block.
-4. The audit record is prepared, saved with the session, and delivered to
-   AGXAI.
+4. The readiness outcome is recorded through AGXAI before it is returned.
 5. If questions remain and `interrupt_call` is configured, the engine asks,
    validates the answers, and goes back to step 2.
 6. On a terminal outcome, the engine delivers the final audit record, calls
@@ -48,8 +46,9 @@ Each step is detailed in [Assessment lifecycle](assessment-lifecycle.md).
   failed audit never produces a ready result.
 - **Audit before acting.** A result is returned only after its AGXAI record is
   delivered.
-- **Never repeat an external side effect.** An interaction or notification
-  that might have run is not repeated automatically.
+- **Recover explicitly.** Interrupted assessments can be resumed without
+  silently repeating an interaction or notification that might already have
+  reached the application.
 - **Own only readiness.** No agent execution, conversation storage, model
   hosting, or orchestration.
 - **Explicit extension points.** Callbacks for application behavior, and

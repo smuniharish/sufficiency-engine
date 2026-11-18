@@ -35,7 +35,7 @@ to use. The call is bounded by `callback_timeout_seconds`.
 
 | Situation | Result |
 | --- | --- |
-| Two questions for compatible slots have cosine similarity of at least 0.98 and similar wording | A `potential_duplicate` warning; both questions are kept |
+| Two questions for compatible slots have similar wording and vectors | A `potential_duplicate` warning; both questions are kept |
 | The model raises, times out, or returns empty, non-finite, zero, or mismatched vectors | An `embedding_unavailable` warning; lexical matching continues |
 | Two questions are exactly the same after normalization, for the same slot | The duplicate is removed, with or without embeddings |
 

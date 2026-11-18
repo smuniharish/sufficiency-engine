@@ -8,53 +8,32 @@ explicitly. For the user-facing guide, see
 
 ![Session claims, fencing, and recovery](../assets/diagrams/persistence-recovery.png){ .diagram }
 
-## Claims and fencing
+## Concurrency contract
 
-`execute` acquires an expiring, exclusive claim before it loads the session,
-and renews it before every step. Each claim carries a fencing token. Every save
-and delete must present the expected revision and the current claim, so:
+`execute` holds an exclusive, expiring claim while it advances a standalone
+session. The persistence implementation must reject concurrent ownership,
+expired or superseded claims, and writes based on stale state. This prevents
+one worker from silently overwriting another worker's assessment.
 
-- A concurrent writer fails at `acquire` with `SessionConflictError`.
-- A paused writer whose lease expired, and whose session was claimed by
-  another process, is fenced off when it tries to save.
-- A stale revision is rejected; there is no last-writer-wins merge.
+## Audit delivery
 
-The lease is the larger of 60 seconds and three callback timeouts, so a
-callback that runs to its deadline does not lose the claim.
+An audit failure can occur after AGXAI accepted some records. A resumed
+assessment may therefore deliver the same records again. Configure AGXAI
+stores to handle repeated records with the same identifiers idempotently; the
+library does not promise a distributed, exactly-once transaction.
 
-## The audit outbox
+## Interrupted callbacks
 
-The engine cannot write the session and AGXAI in one transaction. Instead, it
-uses an outbox:
-
-1. Prepare the audit intent, with stable IDs, and save it in the session.
-2. Deliver it to AGXAI.
-3. Clear it and save the session.
-
-A crash between steps leaves the intent in the session, and the next resume
-delivers it again with the same IDs. This gives at-least-once delivery, so the
-AGXAI stores must treat repeated writes with the same ID as idempotent.
-
-## Side-effect markers
-
-Before calling `interrupt_call` or `command_call`, the engine saves a
-"dispatched" marker. If the process stops before it records the outcome, a
-resume sees the marker and reports the ambiguity instead of calling again.
+If an interaction or terminal notification may already have reached the
+application, the engine reports the ambiguity and does not replay the callback
+automatically. Resume with an explicit response or handle the terminal result
+as described in the recovery guide.
 
 ## Versioning
 
 The stored envelope has `version=1`, and the assessment state has
 `schema_version=1`. A resume with an unknown version is rejected before any
 model call or write. See [Compatibility](../project/compatibility.md).
-
-## Alternatives considered
-
-| Alternative | Why not |
-| --- | --- |
-| Process-local locks | Do not protect multiple workers or hosts |
-| Last-writer-wins saves | Silently lose answers or audit state |
-| Distributed transactions with AGXAI | Not available across arbitrary stores; the outbox is portable |
-| A built-in database adapter | Every host already has its own database and policies; the ABC keeps the core dependency-free |
 
 ## Failure scenarios
 

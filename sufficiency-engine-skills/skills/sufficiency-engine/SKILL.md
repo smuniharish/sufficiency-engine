@@ -16,7 +16,7 @@ compatibility: >-
   dependency. LangGraph integration requires the langgraph extra. The setup
   script is offline and imports LangGraph only with --langgraph.
 metadata:
-  version: "1.0.0"
+  version: "1.0.1"
 ---
 
 # Integrate task readiness

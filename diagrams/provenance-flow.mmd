@@ -3,25 +3,22 @@ flowchart LR
     classDef provider fill:#fff7e8,stroke:#c98a12,color:#0f2547
     classDef app fill:#ecf8f1,stroke:#2f8f5b,color:#0f2547
 
-    state["Assessment step<br/>requirements, answers,<br/>source references"]:::core
-    prepare["AGXAIAudit.prepare<br/>sanitized records,<br/>deterministic UUIDs"]:::core
-    intent["pending_audit<br/>persisted before delivery"]:::core
-    commit["AGXAIAudit.commit<br/>idempotent replay"]:::core
+    state["Assessment outcome<br/>and opaque references"]:::core
 
     subgraph AGXAI["AGXAI"]
-        execution["Execution and<br/>canonical events"]:::provider
-        evidence["Evidence<br/>task input, answers,<br/>source references"]:::provider
-        decision["Decision<br/>proceed, ask, or terminal"]:::provider
-        links["Evidence-to-decision<br/>links"]:::provider
+        execution["Execution and events"]:::provider
+        evidence["Evidence"]:::provider
+        decision["Decision"]:::provider
+        links["Evidence-to-decision links"]:::provider
     end
 
-    result["Result with run, evidence,<br/>decision, and link IDs"]:::app
-    retry["provenance_error<br/>resume retries the same intent"]:::app
+    result["Readiness result with audit references"]:::app
+    retry["Retryable audit failure<br/>resume the assessment"]:::app
 
-    state --> prepare --> intent --> commit
-    commit --> execution
-    commit --> evidence
-    commit --> decision
-    commit --> links
-    commit -- "all writes succeed" --> result
-    commit -- "a write fails" --> retry -. "resume" .-> commit
+    state --> execution
+    state --> evidence
+    state --> decision
+    evidence --> links
+    decision --> links
+    links --> result
+    AGXAI -- "write fails" --> retry

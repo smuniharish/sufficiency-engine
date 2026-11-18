@@ -3,26 +3,22 @@ flowchart TD
     classDef app fill:#ecf8f1,stroke:#2f8f5b,color:#0f2547
     classDef stop fill:#fff7e8,stroke:#c98a12,color:#0f2547
 
-    blocker["Blocking requirement"]:::core
-    necessity{"Model necessity<br/>proposal"}:::core
-    ask["must_ask"]:::core
-    assume["may_assume<br/>requires allow_assumptions<br/>and host approval"]:::core
-    block["must_block / may_defer<br/>no question"]:::stop
-    plan["Plan questions<br/>combine compatible slots,<br/>drop exact duplicates"]:::core
-    similar["Similar candidates<br/>lexical or optional embeddings<br/>warn, never suppress"]:::core
+    blocker["Information is missing"]:::core
+    assess{"Can it be resolved<br/>by asking or an approved assumption?"}:::core
+    ask["Ask the application user"]:::core
+    assume["Use an assumption only<br/>when enabled and approved"]:::core
+    block["Remain not ready"]:::stop
+    plan["Prepare clarification questions"]:::core
     payload["ClarificationPayload"]:::app
-    response["InteractionResponse<br/>values, declines, corrections"]:::app
-    validate{"Answer valid for<br/>type and constraints?"}:::core
-    accept["Accepted answer<br/>for that requirement only"]:::core
-    followup["Targeted follow-up<br/>for unanswered slots"]:::core
-    malformed["Malformed response<br/>consumes an iteration"]:::stop
-    reassess["Reassessment"]:::core
+    response["Answers or declines"]:::app
+    validate{"Valid for the<br/>requirement?"}:::core
+    accept["Accept the answer<br/>for its requirement"]:::core
+    followup["Request a corrected<br/>or missing answer"]:::core
+    reassess["Reassess readiness"]:::core
 
-    blocker --> necessity
-    necessity --> ask --> plan
-    necessity --> assume
-    necessity --> block
-    plan --> similar --> payload --> response --> validate
+    blocker --> assess
+    assess -- "ask" --> ask --> plan --> payload --> response --> validate
+    assess -- "approved assumption" --> assume --> reassess
+    assess -- "no" --> block
     validate -- "yes" --> accept --> reassess
-    validate -- "partial" --> followup --> payload
-    validate -- "no" --> malformed
+    validate -- "no or partial" --> followup --> payload

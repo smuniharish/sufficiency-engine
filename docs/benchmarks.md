@@ -44,9 +44,9 @@ calibration and validation sets. Each pair is labeled as equivalent or not.
 | Questions actually merged | validation | 1.00 | 0.33 |
 
 - **Candidates are never merged.** A lexical candidate is a pair of questions
-  for the same answer slot whose normalized text scores at least 90, but less
-  than 100, with RapidFuzz. The evaluation reports how well that rule finds
-  duplicates; the engine never merges on it.
+  for the same answer slot whose normalized wording is similar but not
+  identical. The internal similarity threshold is not a public setting; the
+  evaluation reports how well candidate warnings find duplicates.
 - **Only identical questions merge.** The pipeline merges a question only when
   its normalized text and answer slot match exactly. That is why its precision
   is 1.0: it never dropped a distinct question, including near negations,
@@ -54,10 +54,9 @@ calibration and validation sets. Each pair is labeled as equivalent or not.
 - **The cost is recall.** Polite rewordings and paraphrases are asked twice.
   The design prefers asking a duplicate question to losing a distinct one.
 - **Embeddings add warnings, not merges.** With an embedding model, such as
-  BGE-M3 through the [optional example](examples/bge-m3.md), a lexical
-  candidate whose cosine similarity is at least 0.98 adds a
-  `potential_duplicate` warning. Both questions are still asked. On these
-  fixtures, BGE-M3 added no warnings.
+  BGE-M3 through the [optional example](examples/bge-m3.md), a similar lexical
+  candidate may add a `potential_duplicate` warning. Both questions are still
+  asked. On these fixtures, BGE-M3 added no warnings.
 
 The fixtures are small and hand-written. Label examples from your own domain
 before relying on these figures; see

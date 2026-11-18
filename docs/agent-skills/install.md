@@ -99,7 +99,7 @@ skills, so you can leave them out.
     ```
 
     ```text
-    PASS  sufficiency-engine 1.0.0, agxai 1.0.2
+    PASS  sufficiency-engine 1.0.1, agxai 1.0.3
     PASS  a complete task is ready without questions
     PASS  a missing value is asked, answered, and reassessed
     PASS  the result has AGXAI provenance
@@ -126,3 +126,63 @@ skills, so you can leave them out.
 Run `npx skills update`, or replace the installed folders with the latest
 directories from the repository, then restart or reload your agent. Each
 skill's `metadata.version` matches the Sufficiency Engine release it describes.
+
+## Upstream skills
+
+Install these separately from the Sufficiency Engine skills. They are maintained
+by their respective upstream projects and are not Python dependencies.
+
+### AGXAI
+
+AGXAI provides `agxai` and `agxai-extend`. The skills CLI needs Node.js 22.20
+or later:
+
+```bash
+npx skills add smuniharish/agxai
+npx skills add smuniharish/agxai --skill agxai
+npx skills add smuniharish/agxai --skill agxai-extend
+```
+
+See the [AGXAI installation guide](https://agxai.readthedocs.io/en/latest/agent-skills/install/)
+for other agents and manual installation.
+
+### LangGraph ecosystem
+
+LangChain maintains the separate [`langchain-skills`](https://github.com/langchain-ai/langchain-skills)
+repository. Its `langchain-build-agent` skill covers LangGraph, LangChain, and
+Deep Agents; upstream labels the repository early development. The documented
+skills-CLI command installs the repository's skills:
+
+```bash
+npx skills add langchain-ai/langchain-skills --skill '*' --yes
+```
+
+The skills CLI needs Node.js 22.20 or later. This repository is not part of the
+`langgraph` Python distribution.
+
+### Pydantic
+
+The [Pydantic repository](https://github.com/pydantic/pydantic) includes a
+`pydantic` skill at `.agents/skills/pydantic`. The skills CLI can install it
+directly from that repository; the [AGXAI guide](https://agxai.readthedocs.io/en/latest/agent-skills/install/)
+documents this invocation:
+
+```bash
+npx skills add https://github.com/pydantic/pydantic --skill pydantic
+```
+
+Pydantic also maintains a separate
+[`pydantic/skills`](https://github.com/pydantic/skills) repository. Its
+documented plugin installation is for Claude Code:
+
+```bash
+claude plugin marketplace add pydantic/skills
+claude plugin install pydantic@pydantic-skills
+```
+
+Use the installation instructions maintained by the Pydantic project for
+other hosts.
+
+This guide lists only upstream skills whose location and installation path
+were confirmed for this audit. Check each upstream project for current
+instructions before installing a skill.
