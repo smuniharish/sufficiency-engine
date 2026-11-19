@@ -14,7 +14,7 @@ compatibility: >-
   with default in-memory factories. Explicit custom factories execute trusted
   application code and may access the configured isolated test backend.
 metadata:
-  version: "1.0.1"
+  version: "1.0.2"
 ---
 
 # Extend application-owned storage and embeddings

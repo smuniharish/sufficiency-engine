@@ -99,7 +99,7 @@ skills, so you can leave them out.
     ```
 
     ```text
-    PASS  sufficiency-engine 1.0.1, agxai 1.0.3
+    PASS  sufficiency-engine 1.0.2, agxai 1.0.3
     PASS  a complete task is ready without questions
     PASS  a missing value is asked, answered, and reassessed
     PASS  the result has AGXAI provenance
