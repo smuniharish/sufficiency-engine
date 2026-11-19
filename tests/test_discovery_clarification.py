@@ -243,6 +243,26 @@ async def test_permanent_failure_does_not_retry_and_callback_timeout_is_bounded(
         await discover(slow, "task", [], config)
 
 
+async def test_preview_discovery_requests_optional_questions_without_changing_normal_prompt():
+    prompts = []
+
+    async def model(messages):
+        prompts.append(messages[0]["content"])
+        return {"requirements": [proposal()]}
+
+    await discover(model, "task", [], EngineConfig())
+    await discover(model, "task", [], EngineConfig(), preview_only=True)
+    await discover(model, "task", [], EngineConfig())
+    assert prompts[0] == prompts[2]
+    assert "non-interactive question preview" not in prompts[0]
+    assert "Propose only necessary questions." in prompts[0]
+    assert "Propose only necessary questions." not in prompts[1]
+    assert "using necessity not_needed" in prompts[1]
+    assert "using necessity may_defer" not in prompts[1]
+    assert "optional information" in prompts[1]
+    assert "user-facing reason" in prompts[1]
+
+
 async def test_deduplication_preserves_followups_and_distinct_slots():
     original = question()
     exact = question("  which   platform  ", requirement_ids=original.requirement_ids)

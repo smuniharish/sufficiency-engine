@@ -1,9 +1,11 @@
 import asyncio
 import json
 from typing import Any
+from unittest.mock import AsyncMock
 from uuid import uuid4, uuid5
 
 import pytest
+from agxai import ExecutionContext, StoreFilter
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 
@@ -69,6 +71,251 @@ def submission(payload, value):
             AnswerSubmission(question_id=question.id, values={question.requirement_ids[0]: value}),
         )
     )
+
+
+@pytest.mark.parametrize("ready", [False, True])
+async def test_preview_includes_optional_questions_without_dispatch_or_storage(ready, monkeypatch):
+    required = proposal()
+    if ready:
+        required.update(status="available", evidence_quote="Linux", necessity="not_needed")
+    optional = proposal(
+        key="style",
+        classification="optional",
+        necessity="may_defer",
+        question="Which presentation style?",
+        reason="The style can tailor the deployment guide.",
+    )
+    model = AsyncMock(return_value={"requirements": [required, optional]})
+    interaction = AsyncMock()
+    notification = AsyncMock()
+    engine = SufficiencyEngine(
+        model_call=model,
+        interrupt_call=interaction,
+        command_call=notification,
+        max_iterations=0,
+    )
+    storage_calls = []
+    for name in ("acquire", "load", "save", "renew", "release"):
+        callback = AsyncMock(side_effect=AssertionError("preview accessed persistence"))
+        monkeypatch.setattr(engine.persistence, name, callback)
+        storage_calls.append(callback)
+
+    result = await engine.execute(input="Deploy Linux", preview_only=True)
+
+    assert result.sufficient is ready
+    assert result.status is (
+        AssessmentStatus.SUFFICIENT if ready else AssessmentStatus.INSUFFICIENT
+    )
+    assert [question.required for question in result.questions] == (
+        [False] if ready else [True, False]
+    )
+    assert result.questions[-1].text == optional["question"]
+    assert result.questions[-1].reason == optional["reason"]
+    assert result.iteration_count == 0
+    assert not result.answers and not result.assumptions
+    assert result.provenance is not None and result.provenance.decision_ids
+    model.assert_awaited_once()
+    interaction.assert_not_called()
+    notification.assert_not_called()
+    for callback in storage_calls:
+        callback.assert_not_called()
+
+
+async def test_preview_flag_does_not_change_subsequent_ordinary_execution():
+    items = [
+        proposal(status="available", evidence_quote="Linux", necessity="not_needed"),
+        proposal(key="style", classification="optional", necessity="may_defer"),
+    ]
+    notification = AsyncMock()
+    engine = SufficiencyEngine(model_call=fake_model(items, items), command_call=notification)
+    preview = await engine.execute(input="Deploy Linux", preview_only=True)
+    ordinary = await engine.execute(input="Deploy Linux")
+    assert preview.sufficient and ordinary.sufficient
+    assert len(preview.questions) == 1
+    assert not ordinary.questions
+    notification.assert_awaited_once_with(ordinary)
+    assert await engine.persistence.load(engine._scope(ordinary.session_id)) is not None
+
+
+@pytest.mark.parametrize("dependency", [False, True])
+async def test_preview_question_required_follows_effective_policy(dependency):
+    optional = proposal(key="platform", classification="optional", necessity="not_needed")
+    items = [optional]
+    if dependency:
+        items.append(
+            proposal(
+                key="service",
+                status="available",
+                evidence_quote="billing",
+                necessity="not_needed",
+                dependencies=["platform"],
+            )
+        )
+    result = await SufficiencyEngine(
+        model_call=fake_model(items), require_optional=not dependency
+    ).execute(input="Deploy billing", preview_only=True)
+    assert not result.sufficient
+    assert len(result.questions) == 1
+    assert result.questions[0].required
+    assert result.questions[0].requirement_ids == (result.blocking_requirements[0].id,)
+    assert result.blocking_requirements[0].classification.value == "optional"
+
+
+async def test_preview_groups_compatible_questions_but_separates_blocking_from_optional():
+    result = await SufficiencyEngine(
+        model_call=fake_model(
+            [
+                proposal(key="first"),
+                proposal(key="second"),
+                proposal(key="extra", classification="optional", necessity="may_defer"),
+            ]
+        )
+    ).execute(input="Deploy", preview_only=True)
+    assert len(result.questions) == 2
+    assert len(result.questions[0].requirement_ids) == 2
+    assert result.questions[0].required
+    assert not result.questions[1].required
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        {"preview_only": "yes"},
+        {"preview_only": True, "resume": True, "session_id": "preview"},
+        {"preview_only": True, "response": InteractionResponse()},
+    ],
+)
+async def test_invalid_preview_options_fail_before_io(options, monkeypatch):
+    model = AsyncMock()
+    engine = SufficiencyEngine(model_call=model)
+    acquire = AsyncMock()
+    monkeypatch.setattr(engine.persistence, "acquire", acquire)
+    commit = AsyncMock()
+    monkeypatch.setattr(engine.audit, "commit", commit)
+    with pytest.raises(ConfigurationError, match="preview_only"):
+        await engine.execute(input="Deploy", **options)
+    model.assert_not_called()
+    acquire.assert_not_called()
+    commit.assert_not_called()
+
+
+async def test_preview_does_not_replace_an_existing_session_and_cannot_be_resumed():
+    engine = SufficiencyEngine(
+        model_call=fake_model(
+            [proposal()],
+            [proposal(status="available", evidence_quote="Linux", necessity="not_needed")],
+            [proposal()],
+        )
+    )
+    original = await engine.execute(input="Deploy", session_id="existing")
+    stored = await engine.persistence.load(engine._scope("existing"))
+    preview = await engine.execute(input="Deploy Linux", session_id="existing", preview_only=True)
+    assert preview.sufficient
+    assert await engine.persistence.load(engine._scope("existing")) == stored
+    assert (await engine.execute(input="Deploy", session_id="existing", resume=True)) == original
+    snapshot = await engine.execute(input="Deploy", preview_only=True)
+    with pytest.raises(ConfigurationError, match="session does not exist"):
+        await engine.execute(input="Deploy", session_id=snapshot.session_id, resume=True)
+
+
+async def test_preview_does_not_assume_or_invent_questions_for_unanswerable_blockers():
+    result = await SufficiencyEngine(
+        model_call=fake_model(
+            [
+                proposal(
+                    necessity="may_assume",
+                    assumption={
+                        "description": "Use Linux",
+                        "value": "Linux",
+                        "risk": "low",
+                        "reversible": True,
+                    },
+                ),
+                proposal(key="permission", necessity="must_block", question="Can this be done?"),
+                proposal(
+                    key="irrelevant",
+                    classification="optional",
+                    necessity="not_needed",
+                    question=None,
+                ),
+            ]
+        ),
+        allow_assumptions=True,
+    ).execute(input="Deploy", preview_only=True)
+    assert not result.sufficient
+    assert len(result.blocking_requirements) == 2
+    assert len(result.questions) == 1
+    assert not result.assumptions
+
+
+async def test_preview_keeps_optional_not_needed_question_without_asking_available_information():
+    result = await SufficiencyEngine(
+        model_call=fake_model(
+            [
+                proposal(status="available", evidence_quote="Linux", necessity="not_needed"),
+                proposal(
+                    key="style",
+                    classification="optional",
+                    necessity="not_needed",
+                    question="Which style?",
+                ),
+            ]
+        )
+    ).execute(input="Deploy Linux", preview_only=True)
+    assert result.sufficient
+    assert [(question.text, question.required) for question in result.questions] == [
+        ("Which style?", False)
+    ]
+
+
+@pytest.mark.parametrize(
+    ("items", "limits", "code"),
+    [
+        (
+            [proposal(status="available", evidence_quote="invented")],
+            Limits(),
+            "model_response_error",
+        ),
+        (
+            [
+                proposal(),
+                proposal(
+                    key="other",
+                    question="Which region?",
+                    classification="optional",
+                    necessity="may_defer",
+                ),
+            ],
+            Limits(max_questions=1),
+            "clarification_error",
+        ),
+        ([proposal(dependencies=["unknown"])], Limits(), "model_response_error"),
+    ],
+)
+async def test_preview_validation_failures_are_explicit_and_audited(items, limits, code):
+    result = await SufficiencyEngine(model_call=fake_model(items), limits=limits).execute(
+        input="Deploy", preview_only=True
+    )
+    assert result.status is AssessmentStatus.FAILED
+    assert not result.sufficient
+    assert result.errors[-1].code == code
+    assert result.provenance is not None
+
+
+async def test_empty_preview_does_not_establish_readiness():
+    result = await SufficiencyEngine(model_call=fake_model([])).execute(
+        input="Deploy", preview_only=True
+    )
+    assert result.status is AssessmentStatus.INSUFFICIENT
+    assert result.warnings[0].code == "empty_discovery"
+    assert not result.questions
+
+
+async def test_preview_fails_explicitly_if_audit_does_not_produce_a_terminal_result(monkeypatch):
+    engine = SufficiencyEngine(model_call=fake_model([proposal()]))
+    monkeypatch.setattr(engine, "_commit_audit", AsyncMock())
+    with pytest.raises(SerializationError, match="preview has no result"):
+        await engine.execute(input="Deploy", preview_only=True)
 
 
 async def test_resume_rejects_unknown_persisted_schema_without_rediscovery():
@@ -497,6 +744,65 @@ class FlakyArchive(InMemorySemanticArchive):
         await super().record(artifact)
 
 
+class WriteThenFailArchive(InMemorySemanticArchive):
+    async def record(self, artifact):
+        await super().record(artifact)
+        raise RuntimeError("acknowledgement lost after write")
+
+
+async def test_failed_preview_audit_is_not_advertised_as_resumable():
+    item = proposal(status="available", evidence_quote="Linux", necessity="not_needed")
+    engine = SufficiencyEngine(
+        model_call=fake_model([item], [item]), audit=AGXAIAudit(archive=FlakyArchive())
+    )
+    failed = await engine.execute(input="Deploy Linux", preview_only=True)
+    assert failed.status is AssessmentStatus.FAILED
+    assert not failed.sufficient
+    assert failed.errors[-1].code == "provenance_error"
+    assert not failed.errors[-1].retryable
+    assert "not saved" in failed.errors[-1].message
+    assert failed.provenance is None
+    assert failed.preview_run_id is not None
+    context = ExecutionContext(
+        application_id=engine.application_id,
+        tenant_id=engine.tenant_id,
+        graph_id="sufficiency-engine",
+        run_id=failed.preview_run_id,
+        thread_id=failed.session_id,
+    )
+    query = StoreFilter(
+        application_id=engine.application_id, tenant_id=engine.tenant_id, run_id=context.run_id
+    )
+    assert [record async for record in engine.audit.store.query(query)]
+    await engine.delete_preview_audit(session_id=failed.session_id, run_id=failed.preview_run_id)
+    assert not [record async for record in engine.audit.store.query(query)]
+    assert not await engine.audit.archive.list_run(context=context)
+    assert await engine.persistence.load(engine._scope(failed.session_id)) is None
+    fresh = await engine.execute(input="Deploy Linux", preview_only=True)
+    assert fresh.sufficient
+    assert fresh.assessment_id != failed.assessment_id
+
+
+async def test_failed_preview_cleanup_removes_partially_written_archive():
+    item = proposal(status="available", evidence_quote="Linux", necessity="not_needed")
+    engine = SufficiencyEngine(
+        model_call=fake_model([item]), audit=AGXAIAudit(archive=WriteThenFailArchive())
+    )
+    result = await engine.execute(input="Linux", preview_only=True)
+    assert result.status is AssessmentStatus.FAILED
+    assert result.provenance is None and result.preview_run_id is not None
+    context = ExecutionContext(
+        application_id=engine.application_id,
+        tenant_id=engine.tenant_id,
+        graph_id="sufficiency-engine",
+        run_id=result.preview_run_id,
+        thread_id=result.session_id,
+    )
+    assert await engine.audit.archive.list_run(context=context)
+    await engine.delete_preview_audit(session_id=result.session_id, run_id=result.preview_run_id)
+    assert not await engine.audit.archive.list_run(context=context)
+
+
 async def test_failed_provenance_preserves_intent_and_resume_does_not_repeat_model():
     calls = 0
     model = fake_model(
@@ -659,6 +965,90 @@ async def test_partial_deletion_is_tombstoned_until_retry():
         await engine.execute(input="Linux", session_id=result.session_id, resume=True)
     await engine.delete_session(result.session_id)
     assert await engine.persistence.load(engine._scope(result.session_id)) is None
+
+
+async def test_preview_cleanup_is_scoped_idempotent_and_preserves_sessions_and_other_runs():
+    item = proposal(status="available", evidence_quote="Linux", necessity="not_needed")
+    audit = AGXAIAudit()
+    engine = SufficiencyEngine(
+        model_call=fake_model([item], [item], [item]), audit=audit, tenant_id="one"
+    )
+    session = await engine.execute(input="Linux", session_id="shared")
+    first = await engine.execute(input="Linux", session_id="shared", preview_only=True)
+    second = await engine.execute(input="Linux", session_id="shared", preview_only=True)
+    assert first.preview_run_id is not None and first.provenance is not None
+    assert session.provenance is not None
+    assert first.preview_run_id == first.provenance.run_id
+    assert second.preview_run_id is not None
+    assert session.preview_run_id is None
+    stored = await engine.persistence.load(engine._scope("shared"))
+    assert stored is not None
+
+    def context(run_id, tenant="one"):
+        return ExecutionContext(
+            application_id=engine.application_id,
+            tenant_id=tenant,
+            graph_id="sufficiency-engine",
+            run_id=run_id,
+            thread_id="shared",
+        )
+
+    def query(run_id, tenant="one"):
+        return StoreFilter(application_id=engine.application_id, tenant_id=tenant, run_id=run_id)
+
+    other = SufficiencyEngine(model_call=fake_model([item]), audit=audit, tenant_id="two")
+    await other.delete_preview_audit(session_id="shared", run_id=first.preview_run_id)
+    other_app = SufficiencyEngine(
+        model_call=fake_model([item]), audit=audit, application_id="other"
+    )
+    await other_app.delete_preview_audit(session_id="shared", run_id=first.preview_run_id)
+    assert await audit.archive.list_run(context=context(first.preview_run_id))
+    assert [record async for record in audit.store.query(query(first.preview_run_id))]
+    await engine.delete_preview_audit(session_id="shared", run_id=first.preview_run_id)
+    await engine.delete_preview_audit(session_id="shared", run_id=first.preview_run_id)
+    assert not await audit.archive.list_run(context=context(first.preview_run_id))
+    assert not [record async for record in audit.store.query(query(first.preview_run_id))]
+    assert await audit.archive.list_run(context=context(second.preview_run_id))
+    assert await audit.archive.list_run(context=context(session.provenance.run_id))
+    assert await engine.persistence.load(engine._scope("shared")) == stored
+    assert (await engine.execute(input="Linux", session_id="shared", resume=True)) == session
+    await engine.delete_session("shared")
+    assert await audit.archive.list_run(context=context(second.preview_run_id))
+
+
+async def test_preview_cleanup_rejects_invalid_identifiers():
+    engine = SufficiencyEngine(model_call=fake_model([]))
+    invalid_run_id: Any = "not-a-uuid"
+    with pytest.raises(ConfigurationError, match="run ID"):
+        await engine.delete_preview_audit(session_id="valid", run_id=invalid_run_id)
+    with pytest.raises(ConfigurationError, match="session ID"):
+        await engine.delete_preview_audit(session_id="", run_id=uuid4())
+
+
+async def test_preview_cleanup_can_retry_after_partial_deletion():
+    item = proposal(status="available", evidence_quote="Linux", necessity="not_needed")
+    audit = AGXAIAudit(archive=FailingDeletionArchive())
+    engine = SufficiencyEngine(model_call=fake_model([item]), audit=audit)
+    result = await engine.execute(input="Linux", preview_only=True)
+    assert result.preview_run_id is not None
+    context = ExecutionContext(
+        application_id=engine.application_id,
+        tenant_id=engine.tenant_id,
+        graph_id="sufficiency-engine",
+        run_id=result.preview_run_id,
+        thread_id=result.session_id,
+    )
+    query = StoreFilter(
+        application_id=engine.application_id, tenant_id=engine.tenant_id, run_id=context.run_id
+    )
+    with pytest.raises(ProvenanceError, match="provenance deletion failed"):
+        await engine.delete_preview_audit(
+            session_id=result.session_id, run_id=result.preview_run_id
+        )
+    assert not [record async for record in audit.store.query(query)]
+    assert await audit.archive.list_run(context=context)
+    await engine.delete_preview_audit(session_id=result.session_id, run_id=result.preview_run_id)
+    assert not await audit.archive.list_run(context=context)
 
 
 async def test_unresolved_reassessment_cannot_reuse_a_structurally_valid_answer():

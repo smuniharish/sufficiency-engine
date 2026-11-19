@@ -34,7 +34,8 @@ default and what a deployment must still decide.
 | Area | What to do |
 | --- | --- |
 | Authentication | Authenticate the caller and choose `application_id`, `tenant_id`, and `session_id` from trusted data. The library trusts the scope it is given. |
-| Session data | Session snapshots and LangGraph checkpoints contain the task and answers. Restrict access, encrypt at rest, and apply your retention period; `delete_session` erases a session and its AGXAI run. |
+| Session data | Session snapshots and LangGraph checkpoints contain the task and answers. Restrict access, encrypt at rest, and apply your retention period; `delete_session` erases a saved session and its AGXAI run, not host checkpoints or preview runs. |
+| Preview audit retention | Retain and authorize each preview's `session_id` and `preview_run_id` and call `delete_preview_audit` for each run. AGXAI scopes deletion by application, tenant, and run, not session or run type; protect these IDs from unauthorized use. Configure backend retention for interrupted previews that return no cleanup ID. |
 | Model providers | `model_call` sends the task and answers to your model. Use a provider and region your data agreements permit. |
 | Readiness | A sufficient result means no known blocker remains. It does not authorize the task or prove that discovery found every requirement; your application decides whether to act. |
 | Callbacks | Callbacks are trusted application code. A timed-out synchronous callback keeps running in its thread, so make side effects idempotent. |

@@ -122,8 +122,8 @@ _SYSTEM = (
     "matching the schema below. Do not execute the task. Use stable, distinct keys for "
     "the same requirements across reassessment. Cite an exact substring of supplied "
     "task text or accepted answers when status is available. Information not supplied "
-    "is unresolved, not proof it is absent from the host application. Propose only "
-    "necessary questions. Classify information as mandatory or minimum only when a "
+    "is unresolved, not proof it is absent from the host application. {question_guidance} "
+    "Classify information as mandatory or minimum only when a "
     "competent assistant could not perform the task correctly without it; details with "
     "an obvious conventional choice, such as names, formatting, or standard edge-case "
     "handling, are optional with necessity not_needed. When the user could supply "
@@ -142,11 +142,37 @@ _SYSTEM = (
     "Describe splits, merges, replacements, or retirement explicitly using lineage.\n"
 )
 
+_PREVIEW = (
+    "This is a non-interactive question preview. Also propose questions for useful "
+    "optional information that is unresolved, using necessity not_needed. Do not "
+    "invent optional preferences merely to fill a questionnaire. Do not ask about "
+    "information already supplied or blockers that no user answer can resolve. "
+    "For an unresolved requirement with a proposed assumption, also provide a "
+    "question when a user answer could resolve it; no assumption will be approved "
+    "in preview. Give each question a concise user-facing reason explaining why "
+    "the information matters, not internal reasoning. Questions are for display "
+    "only; Python policy still determines blocking and readiness.\n"
+)
 
-def build_messages(task: str, prior: list[dict[str, JsonValue]]) -> list[dict[str, str]]:
+
+def build_messages(
+    task: str, prior: list[dict[str, JsonValue]], *, preview_only: bool = False
+) -> list[dict[str, str]]:
     """Construct the explicit prompt without importing a model provider."""
+    system = _SYSTEM.format(
+        question_guidance=(
+            "Propose necessary questions and useful optional questions."
+            if preview_only
+            else "Propose only necessary questions."
+        )
+    )
     return [
-        {"role": "system", "content": _SYSTEM + json.dumps(DiscoveryResponse.model_json_schema())},
+        {
+            "role": "system",
+            "content": system
+            + (_PREVIEW if preview_only else "")
+            + json.dumps(DiscoveryResponse.model_json_schema()),
+        },
         {"role": "user", "content": json.dumps({"task": task, "prior": prior}, ensure_ascii=False)},
     ]
 
@@ -195,13 +221,15 @@ async def discover(
     prior: list[dict[str, JsonValue]],
     config: EngineConfig,
     on_retry: Callable[[int], Awaitable[None]] | None = None,
+    *,
+    preview_only: bool = False,
 ) -> DiscoveryResponse:
     """Invoke discovery with bounded retries only for explicitly transient failures.
 
     Timeouts are treated as transient. Validation and other callback failures are
     not retried. Cancellation propagates to the caller.
     """
-    messages = build_messages(task, prior)
+    messages = build_messages(task, prior, preview_only=preview_only)
     for attempt in range(config.max_model_retries + 1):
         try:
             output = await invoke(callback, messages, config.limits.callback_timeout_seconds)

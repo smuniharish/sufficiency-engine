@@ -184,6 +184,7 @@ class SufficiencyEngine:
         resume: bool = False,
         response: InteractionResponse | Mapping[str, object] | None = None,
         source_references: tuple[UUID, ...] = (),
+        preview_only: bool = False,
     ) -> AssessmentResult:
         """Assess a task or resume an existing session.
 
@@ -192,17 +193,28 @@ class SufficiencyEngine:
         ambiguous interaction. A failed audit remains pending and is retried
         using the same stable identifiers on resume.
 
+        With ``preview_only=True``, return an audited readiness snapshot with
+        missing required and useful optional questions. No interaction or terminal
+        callback is dispatched, and no session is read or saved. The snapshot
+        cannot accept answers or be resumed; a later assessment starts separately.
+
         Raises:
             ConfigurationError: If input, resume options, or identifiers are invalid.
             PersistenceError: If session state cannot be safely loaded or saved.
             CallbackError: If terminal notification fails or has an ambiguous outcome.
         """
         self._validate_task(input)
+        if not isinstance(preview_only, bool):
+            raise ConfigurationError("preview_only must be a boolean")
+        if preview_only and (resume or response is not None):
+            raise ConfigurationError("preview_only cannot be combined with resume or response")
         if resume and session_id is None:
             raise ConfigurationError("resuming requires a session ID")
         if response is not None and not resume:
             raise ConfigurationError("an explicit response requires resume=True")
         scope = self._scope(session_id or uuid4().hex)
+        if preview_only:
+            return await self._preview(self._new_state(input, scope, source_references))
         owner = uuid4()
         claim = await self._persistence_call(
             self.persistence.acquire(scope, owner, self._lease_seconds)
@@ -344,7 +356,7 @@ class SufficiencyEngine:
             await self._persistence_call(self.persistence.release(scope, claim))
 
     async def delete_session(self, session_id: str) -> None:
-        """Delete session and AGXAI data; host checkpoints are managed separately."""
+        """Delete a saved session and its AGXAI run; previews and checkpoints are separate."""
         scope = self._scope(session_id)
         claim = await self._persistence_call(
             self.persistence.acquire(scope, uuid4(), self._lease_seconds)
@@ -378,6 +390,32 @@ class SufficiencyEngine:
             )
         finally:
             await self._persistence_call(self.persistence.release(scope, claim))
+
+    async def delete_preview_audit(self, *, session_id: str, run_id: UUID) -> None:
+        """Delete one preview's AGXAI run in this engine's application and tenant.
+
+        Use the session ID and preview_run_id returned by execute. No session is
+        read or modified. The host must authorize the run ID: AGXAI deletion is
+        scoped by application, tenant, and run, not by session ID or run type.
+        Repeating a completed or partially failed deletion is safe.
+
+        Raises:
+            ConfigurationError: If either identifier is invalid.
+            ProvenanceError: If deletion fails or its outcome is ambiguous; retry.
+        """
+        scope = self._scope(session_id)
+        if not isinstance(run_id, UUID):
+            raise ConfigurationError("preview run ID must be a UUID")
+        from agxai import ExecutionContext
+
+        context = ExecutionContext(
+            application_id=scope.application_id,
+            tenant_id=scope.tenant_id,
+            graph_id="sufficiency-engine",
+            run_id=run_id,
+            thread_id=scope.session_id,
+        )
+        await self.audit.delete_run(context)
 
     @staticmethod
     async def _persistence_call(operation: Awaitable[_T]) -> _T:
@@ -654,14 +692,44 @@ class SufficiencyEngine:
                 if dependencies != item.dependencies:
                     requirements[key] = item.model_copy(update={"dependencies": dependencies})
 
-    async def _discover_and_plan(self, state: AssessmentState) -> None:
+    async def _preview(self, state: AssessmentState) -> AssessmentResult:
+        try:
+            await self._discover_and_plan(state, preview_only=True)
+        except SufficiencyError as exc:
+            state.errors.append(
+                Diagnostic(code=exc.code, message=str(exc), retryable=exc.retryable)
+            )
+            self._prepare_terminal(state, AssessmentStatus.FAILED)
+        try:
+            await self._commit_audit(state)
+        except ProvenanceError:
+            result = self._failed_result(
+                state,
+                "provenance_error",
+                "Required preview provenance could not be committed. "
+                "The preview was not saved; a new call starts a separate assessment.",
+                retryable=False,
+            )
+            return result.model_copy(update={"preview_run_id": state.run_id})
+        if state.result is None:
+            raise SerializationError("preview has no result")
+        return state.result.model_copy(update={"preview_run_id": state.run_id})
+
+    async def _discover_and_plan(
+        self, state: AssessmentState, *, preview_only: bool = False
+    ) -> None:
         async def on_retry(_attempt: int) -> None:
             await self._observe(state, "model_retry", "retry", 0)
 
         started = time.perf_counter()
         try:
             response = await discover(
-                self.model_call, state.task, self._prior(state), self.config, on_retry
+                self.model_call,
+                state.task,
+                self._prior(state),
+                self.config,
+                on_retry,
+                preview_only=preview_only,
             )
             self._reconcile(state, response)
         except SufficiencyError:
@@ -695,6 +763,9 @@ class SufficiencyEngine:
             )
             self._prepare_terminal(state, AssessmentStatus.INSUFFICIENT)
             return
+        if preview_only:
+            await self._plan_preview_questions(state)
+            return
         blockers = [item for item in state.requirements if item.blocking]
         if not blockers:
             self._prepare_terminal(state, AssessmentStatus.SUFFICIENT)
@@ -724,6 +795,66 @@ class SufficiencyEngine:
                     else "The requirement is unresolved.",
                 )
             )
+        pending_questions = await self._retain_questions(state, pending)
+        old_assumptions = {assumption.id for assumption in state.assumptions}
+        state.assumptions.extend(
+            assumption for assumption in pending_assumptions if assumption.id not in old_assumptions
+        )
+        state.pending_question_ids = [question.id for question in pending_questions]
+        state.pending_assumption_ids = [assumption.id for assumption in pending_assumptions]
+        if not pending_questions and not pending_assumptions:
+            self._prepare_terminal(state, AssessmentStatus.INSUFFICIENT)
+            return
+        state.phase = "waiting"
+        self._prepare_audit(state, "pending", terminal=False)
+
+    async def _plan_preview_questions(self, state: AssessmentState) -> None:
+        proposals = {proposal.key: proposal for proposal in state.proposals}
+        pending: list[ClarificationQuestion] = []
+        for item in state.requirements:
+            if item.lifecycle is not RequirementLifecycle.ACTIVE or item.status not in {
+                RequirementStatus.MISSING,
+                RequirementStatus.UNRESOLVED,
+            }:
+                continue
+            proposal = proposals.get(item.key)
+            action = NecessityDecision.MUST_BLOCK if item.blocking else NecessityDecision.NOT_NEEDED
+            if (
+                proposal is not None
+                and proposal.question is not None
+                and proposal.necessity
+                in {
+                    NecessityDecision.MUST_ASK,
+                    NecessityDecision.MAY_ASSUME,
+                    NecessityDecision.MAY_DEFER,
+                    NecessityDecision.NOT_NEEDED,
+                }
+            ):
+                pending.append(self._make_question(state, item, proposal, proposal.question))
+                action = (
+                    NecessityDecision.MUST_ASK if item.blocking else NecessityDecision.MAY_DEFER
+                )
+            state.decisions.append(
+                Decision(
+                    id=uuid5(state.assessment_id, f"necessity:{state.iterations}:{item.id}"),
+                    requirement_ids=(item.id,),
+                    action=action,
+                    reason=proposal.reason
+                    if proposal is not None
+                    else "The requirement is unresolved.",
+                )
+            )
+        await self._retain_questions(state, pending)
+        self._prepare_terminal(
+            state,
+            AssessmentStatus.INSUFFICIENT
+            if any(item.blocking for item in state.requirements)
+            else AssessmentStatus.SUFFICIENT,
+        )
+
+    async def _retain_questions(
+        self, state: AssessmentState, pending: list[ClarificationQuestion]
+    ) -> tuple[ClarificationQuestion, ...]:
         pending_questions, warnings = await deduplicate_questions(
             combine_related_questions(pending, state.assessment_id),
             self.embedding_model,
@@ -736,17 +867,7 @@ class SufficiencyEngine:
         state.questions.extend(
             question for question in pending_questions if question.id not in old_ids
         )
-        old_assumptions = {assumption.id for assumption in state.assumptions}
-        state.assumptions.extend(
-            assumption for assumption in pending_assumptions if assumption.id not in old_assumptions
-        )
-        state.pending_question_ids = [question.id for question in pending_questions]
-        state.pending_assumption_ids = [assumption.id for assumption in pending_assumptions]
-        if not pending_questions and not pending_assumptions:
-            self._prepare_terminal(state, AssessmentStatus.INSUFFICIENT)
-            return
-        state.phase = "waiting"
-        self._prepare_audit(state, "pending", terminal=False)
+        return pending_questions
 
     def _question_or_assumption(
         self, state: AssessmentState, item: Requirement, proposal: RequirementProposal
@@ -785,6 +906,19 @@ class SufficiencyEngine:
         )
         if not should_ask or proposal.question is None:
             return NecessityDecision.MUST_BLOCK, None, None
+        return (
+            NecessityDecision.MUST_ASK,
+            self._make_question(state, item, proposal, proposal.question),
+            None,
+        )
+
+    def _make_question(
+        self,
+        state: AssessmentState,
+        item: Requirement,
+        proposal: RequirementProposal,
+        text: str,
+    ) -> ClarificationQuestion:
         previous_question = next(
             (
                 question
@@ -809,7 +943,6 @@ class SufficiencyEngine:
             state.assessment_id,
             f"question:{item.id}:{proposal.answer_slot}:{follow_up or 'initial'}",
         )
-        text = proposal.question
         if (
             follow_up is not None
             and previous_question is not None
@@ -822,17 +955,17 @@ class SufficiencyEngine:
                 if len(prefix) + len(item.description) <= 2_048
                 else item.description
             )
-        question = ClarificationQuestion(
+        return ClarificationQuestion(
             id=question_id,
             requirement_ids=(item.id,),
             text=text,
             reason=proposal.reason,
             expected_type=proposal.answer_type,
             constraints=proposal.constraints,
+            required=item.blocking,
             answer_slot=proposal.answer_slot,
             follow_up_to=follow_up,
         )
-        return NecessityDecision.MUST_ASK, question, None
 
     def _prepare_audit(self, state: AssessmentState, action: str, *, terminal: bool) -> None:
         state.pending_audit = self.audit.prepare(

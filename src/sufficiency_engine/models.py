@@ -179,7 +179,12 @@ class Requirement(FrozenModel):
 
 
 class ClarificationQuestion(FrozenModel):
-    """A question tied to one or more stable requirement answer slots."""
+    """A question tied to one or more stable requirement answer slots.
+
+    ``reason`` is a user-facing rationale. ``required`` reflects effective
+    readiness blocking, not merely requirement classification. Preview results
+    can include non-blocking questions without requesting answers.
+    """
 
     id: UUID = Field(default_factory=uuid4)
     requirement_ids: tuple[UUID, ...] = Field(min_length=1)
@@ -278,7 +283,7 @@ class InteractionResponse(FrozenModel):
 
 
 class AssessmentResult(FrozenModel):
-    """A terminal assessment with an explicit audited readiness outcome."""
+    """A terminal outcome; preview_run_id is a cleanup handle, not proof of audit delivery."""
 
     assessment_id: UUID
     session_id: str
@@ -296,6 +301,7 @@ class AssessmentResult(FrozenModel):
     warnings: tuple[Diagnostic, ...] = ()
     errors: tuple[Diagnostic, ...] = ()
     provenance: ProvenanceReferences | None = None
+    preview_run_id: UUID | None = None
     lineage: tuple[RequirementLineage, ...] = ()
     completion_reason: Annotated[str, Field(min_length=1, max_length=2_048)]
 

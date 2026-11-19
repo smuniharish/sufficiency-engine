@@ -122,6 +122,26 @@ readiness check at this application's task entry, following the skill's
 workflow and safety rules.
 ```
 
+## Downloads
+
+<p>
+  <a href="https://clickpy.clickhouse.com/dashboard/sufficiency-engine"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fsql-clickhouse.clickhouse.com%2F%3Fuser%3Ddemo%26query%3DSELECT%2520sum%2528count%2529%2520v%2520FROM%2520pypi.pypi_downloads_per_day%2520WHERE%2520project%253D%2527sufficiency-engine%2527%2520FORMAT%2520JSON&query=%24.data%5B0%5D.v&label=downloads&color=blue&cacheSeconds=3600" alt="Total downloads"></a>
+  <a href="https://clickpy.clickhouse.com/dashboard/sufficiency-engine"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fsql-clickhouse.clickhouse.com%2F%3Fuser%3Ddemo%26query%3DSELECT%2520sum%2528count%2529%2520v%2520FROM%2520pypi.pypi_downloads_per_day%2520WHERE%2520project%253D%2527sufficiency-engine%2527%2520AND%2520date%2520%253E%253D%2520toStartOfWeek%2528today%2528%2529%252C%25201%2529%2520FORMAT%2520JSON&query=%24.data%5B0%5D.v&label=this%20week&color=blue&cacheSeconds=3600" alt="Downloads this week"></a>
+  <a href="https://clickpy.clickhouse.com/dashboard/sufficiency-engine"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fsql-clickhouse.clickhouse.com%2F%3Fuser%3Ddemo%26query%3DSELECT%2520sum%2528count%2529%2520v%2520FROM%2520pypi.pypi_downloads_per_day%2520WHERE%2520project%253D%2527sufficiency-engine%2527%2520AND%2520date%2520%253E%253D%2520toStartOfMonth%2528today%2528%2529%2529%2520FORMAT%2520JSON&query=%24.data%5B0%5D.v&label=this%20month&color=blue&cacheSeconds=3600" alt="Downloads this month"></a>
+  <a href="https://clickpy.clickhouse.com/dashboard/sufficiency-engine"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fsql-clickhouse.clickhouse.com%2F%3Fuser%3Ddemo%26query%3DSELECT%2520sum%2528count%2529%2520v%2520FROM%2520pypi.pypi_downloads_per_day%2520WHERE%2520project%253D%2527sufficiency-engine%2527%2520AND%2520date%2520%253E%253D%2520toStartOfYear%2528today%2528%2529%2529%2520FORMAT%2520JSON&query=%24.data%5B0%5D.v&label=this%20year&color=blue&cacheSeconds=3600" alt="Downloads this year"></a>
+</p>
+<p>
+  <a href="https://clickpy.clickhouse.com/dashboard/sufficiency-engine"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fsql-clickhouse.clickhouse.com%2F%3Fuser%3Ddemo%26query%3DSELECT%2520arrayStringConcat%2528groupArray%2528concat%2528toString%2528y%2529%252C%2520%2527%253A%2520%2527%252C%2520toString%2528c%2529%2529%2529%252C%2520%2527%2520%257C%2520%2527%2529%2520v%2520FROM%2520%2528SELECT%2520toYear%2528date%2529%2520y%252C%2520sum%2528count%2529%2520c%2520FROM%2520pypi.pypi_downloads_per_day%2520WHERE%2520project%253D%2527sufficiency-engine%2527%2520GROUP%2520BY%2520y%2520ORDER%2520BY%2520y%2529%2520FORMAT%2520JSON&query=%24.data%5B0%5D.v&label=by%20year&color=blue&cacheSeconds=3600" alt="Downloads by year"></a>
+  <a href="https://clickpy.clickhouse.com/dashboard/sufficiency-engine"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fsql-clickhouse.clickhouse.com%2F%3Fuser%3Ddemo%26query%3DSELECT%2520arrayStringConcat%2528groupArray%2528concat%2528country_code%252C%2520%2527%2520%2527%252C%2520toString%2528c%2529%2529%2529%252C%2520%2527%2520%257C%2520%2527%2529%2520v%2520FROM%2520%2528SELECT%2520country_code%252C%2520sum%2528count%2529%2520c%2520FROM%2520pypi.pypi_downloads_per_day_by_version_by_country%2520WHERE%2520project%253D%2527sufficiency-engine%2527%2520GROUP%2520BY%2520country_code%2520ORDER%2520BY%2520c%2520DESC%2520LIMIT%25205%2529%2520FORMAT%2520JSON&query=%24.data%5B0%5D.v&label=top%20countries&color=blue&cacheSeconds=3600" alt="Top download countries"></a>
+</p>
+
+The counts are fetched live from the
+[ClickHouse public PyPI dataset](https://clickpy.clickhouse.com/dashboard/sufficiency-engine)
+each time the badges load. The dataset refreshes daily and badge images are
+cached for up to an hour. Weeks start on Monday (UTC). Daily, monthly, version,
+and country charts are on the
+[ClickPy dashboard](https://clickpy.clickhouse.com/dashboard/sufficiency-engine).
+
 ## Where to go next
 
 <div class="grid cards" markdown>

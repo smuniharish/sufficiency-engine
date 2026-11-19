@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.2
+
+- Add `execute(preview_only=True)` for audited, non-interactive readiness
+  snapshots with missing required and useful optional questions and user-facing
+  reasons. Reuse the existing result models without invoking interaction or
+  terminal callbacks, consuming clarification rounds, or saving sessions.
+- Preview question `required` flags follow effective blocking policy. Ready
+  snapshots can still show non-blocking optional questions; ordinary execution
+  and stored-session formats remain unchanged.
+- Retain optional preview questions marked `not_needed`. Expose a preview audit
+  cleanup handle even when audit delivery fails and provide explicit,
+  retryable `delete_preview_audit` deletion.
+- Show live PyPI download badges (total, this week, this month, this year, by
+  year, and top countries) in the README and documentation home page.
+
 ## 1.0.1
 
 Backward-compatible maintenance release. No public API or stored-session

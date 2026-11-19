@@ -18,6 +18,15 @@ engine = SufficiencyEngine(
 result = await engine.execute(input="Deploy the billing service.")
 ```
 
+For a non-interactive snapshot, use `await engine.execute(input=task,
+preview_only=True)`. It returns the same `AssessmentResult`, including readiness,
+blocking questions, and useful optional questions with their reasons. Neither
+interaction nor terminal callbacks run, and no resumable session is saved.
+Keep `result.preview_run_id` and `result.session_id` for explicit
+`delete_preview_audit` cleanup, even when audit delivery fails.
+See [Question previews](../guide/concepts/clarification.md#preview-questions-without-requesting-answers)
+for policy consequences, failure handling, and remaining I/O.
+
 ::: sufficiency_engine.engine.SufficiencyEngine
 
 ::: sufficiency_engine.config.EngineConfig

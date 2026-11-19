@@ -51,6 +51,29 @@ discovery is complete or that execution is authorized.
    `CallbackError` instead of replaying. Its handler should be idempotent and
    keyed by `assessment_id`.
 
+## Preview without asking
+
+When the application only wants to show missing required and useful optional
+questions, call `await engine.execute(input=task, preview_only=True)`. It returns
+the same `AssessmentResult`: render each question's `text` and `reason`, and
+explain that `required=True` remains blocking if unanswered while `False` does
+not block readiness. Effective policy determines this flag, including optional
+prerequisites and `require_optional=True`. A sufficient preview may still have
+optional questions.
+
+Preview never calls `interrupt_call` or `command_call`, approves assumptions,
+or reads/saves a session. Model calls, AGXAI auditing, and optional telemetry or
+embeddings still run under normal limits; audit failure never permits readiness.
+Do not pass `resume=True` or `response`, or promise that preview question IDs can
+accept later answers. Start a separate assessment for interaction. A failed
+preview audit has no saved intent to resume.
+Preserve each returned preview's `session_id` and `preview_run_id` even on
+audit failure, and use `await engine.delete_preview_audit(session_id=...,
+run_id=...)` for retention. Retry partial deletion failures. Authorize the run
+ID: deletion scopes by application, tenant, and run, not session or run type.
+`delete_session` does not delete preview runs. Configure backend retention for
+previews interrupted before returning their cleanup IDs.
+
 ## Read as needed
 
 | Concern | Reference |
